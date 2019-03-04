@@ -169,7 +169,7 @@ initial_lex = Lexicon.fromstring(r"""
   to => N\N/N {\x y.x}
 
   one => S/N/N {\x d.move(unique(\y.relate(x,y,d)))}
-  right => N/N {\f x.and_(apply(f, x),quadrant(x,right))}
+  right => N/N {\f x.and_(apply(f, x),in_half(x,right))}
 
   the => N/N {\x.unique(x)}
 
