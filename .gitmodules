@@ -1,0 +1,3 @@
+[submodule "upstream"]
+	path = upstream
+	url = git://github.com/jannerm/spatial-reasoning
