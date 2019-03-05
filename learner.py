@@ -1,4 +1,5 @@
 #! /usr/bin/env python3
+import operator
 import pickle
 
 from frozendict import frozendict
@@ -127,6 +128,19 @@ def fn_in_half(obj, direction):
   if direction == "up":
     return a["row"] < SCENE_HEIGHT / 2
 
+def fn_max_in_dir(obj, direction):
+  # e.g. "bottom most horse"
+  # where "horse" forms the relevant comparison class
+  lookup_keys = {
+      "left": "col", "right": "col",
+      "down": "row", "up": "row"
+  }
+  key = lookup_keys[direction]
+  reverse = direction in ["left", "up"]
+
+  comparison_class = set([obj]) # TODO critical: need global scene info here..
+  return max(comparison_class, key=operator.itemgetter(key), reverse=reverse) == obj
+
 
 types = TypeSystem(["object", "boolean", "action", "direction", "int"])
 
@@ -138,6 +152,7 @@ functions = [
   types.new_function("in_half", ("object", "direction", "boolean"), fn_in_half),
   types.new_function("apply", (("object", "boolean"), "object", "boolean"), lambda f, o: f(o)),
   types.new_function("and_", ("boolean", "boolean", "boolean"), lambda a, b: a and b),
+  types.new_function("max_in_dir", ("object", "direction", "boolean"), fn_max_in_dir),
 ]
 def make_obj_fn(obj):
   return lambda o: o["type"] == obj
@@ -165,6 +180,7 @@ initial_lex = Lexicon.fromstring(r"""
   :- S, N
 
   reach => S/N {\x.move(x)}
+  reach => S/N {\x.move(unique(x))}
   below => S/N {\x.move(unique(\y.relate(x,y,down)))}
   above => S/N {\x.move(unique(\y.relate(x,y,up)))}
 
@@ -178,6 +194,8 @@ initial_lex = Lexicon.fromstring(r"""
   one => S/N/N {\x d.move(unique(\y.relate(x,y,d)))}
   one => S/N/N {\x d.move(unique(\y.relate_n(x,y,d,1)))}
   right => N/N {\f x.and_(apply(f, x),in_half(x,right))}
+
+  most => N\N/N {\x d.max_in_dir(x, d)}
 
   the => N/N {\x.unique(x)}
 
