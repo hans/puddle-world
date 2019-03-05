@@ -141,6 +141,10 @@ def fn_max_in_dir(obj, direction):
   comparison_class = set([obj]) # TODO critical: need global scene info here..
   return max(comparison_class, key=operator.itemgetter(key), reverse=reverse) == obj
 
+def fn_is_edge(obj):
+  # true when obj is at the edge of the grid.
+  return obj["col"] in [0, SCENE_WIDTH - 1] and obj["row"] in [0, SCENE_HEIGHT - 1]
+
 
 types = TypeSystem(["object", "boolean", "action", "direction", "int"])
 
@@ -153,6 +157,7 @@ functions = [
   types.new_function("apply", (("object", "boolean"), "object", "boolean"), lambda f, o: f(o)),
   types.new_function("and_", ("boolean", "boolean", "boolean"), lambda a, b: a and b),
   types.new_function("max_in_dir", ("object", "direction", "boolean"), fn_max_in_dir),
+  types.new_function("is_edge", ("object", "boolean"), fn_is_edge),
 ]
 def make_obj_fn(obj):
   return lambda o: o["type"] == obj
