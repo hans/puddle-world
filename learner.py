@@ -15,25 +15,26 @@ from pyccg.word_learner import WordLearner
 #########
 # Load and prepare dataset.
 
+# Grr, object IDs are offset in the pkl for some reason.
 obj_dict = {
   0: 'grass',
-  1: 'puddle',
-  2: 'star',
-  3: 'circle',
-  4: 'triangle',
-  5: 'heart',
-  6: 'spade',
-  7: 'diamond',
-  8: 'rock',
-  9: 'tree',
-  10: 'house',
-  11: 'horse'
+  # 1: 'puddle',
+  1: 'star',
+  2: 'circle',
+  3: 'triangle',
+  4: 'heart',
+  5: 'spade',
+  6: 'diamond',
+  7: 'rock',
+  8: 'tree',
+  9: 'house',
+  10: 'horse'
 }
 
 def process_scene(states, objects):
   objects = objects[0]
-  objects = {(x, y): frozendict(x=x, y=y, type=obj_dict[val])
-              for (y, x), val in np.ndenumerate(objects)}
+  objects = {(row, col): frozendict(row=row, col=col, type=obj_dict[val])
+              for (row, col), val in np.ndenumerate(objects)}
   return {"objects": list(objects.values())}
 
 
@@ -46,6 +47,7 @@ lengths = np.array([len(instr.split(" ")) for instr in instructions])
 sorted_idxs = lengths.argsort()
 states = states[sorted_idxs]
 objects = objects[sorted_idxs]
+goals = [goals[idx] for idx in sorted_idxs]
 instructions = [instructions[idx] for idx in sorted_idxs]
 SCENE_WIDTH, SCENE_HEIGHT = objects[0][0].shape
 
@@ -98,29 +100,30 @@ class Move(Action):
 
 def fn_pick(target):
   if isinstance(target, frozendict):
-    return (target["x"], target["y"])
+    return (target["row"], target["col"])
 
 
 def fn_relate(a, b, direction):
+  # a is DIRECTION of b
   if direction == "left":
-    return a["x"] < b["x"]
+    return a["col"] < b["col"]
   if direction == "right":
-    return a["x"] > b["y"]
+    return a["col"] > b["col"]
   if direction == "down":
-    return a["x"] == b["x"] and a["y"] == b["y"] - 1
+    return a["col"] == b["col"] and a["row"] == b["row"] + 1
     # return a["y"] > b["y"]
   if direction == "up":
-    return a["y"] < b["y"]
+    return a["col"] == b["col"] and a["row"] == b["row"] - 1
 
 def fn_in_half(obj, direction):
   if direction == "left":
-    return a["x"] < SCENE_WIDTH / 2
+    return a["col"] < SCENE_WIDTH / 2
   if direction == "right":
-    return a["x"] > SCENE_WIDTH / 2
+    return a["col"] > SCENE_WIDTH / 2
   if direction == "down":
-    return a["y"] > SCENE_WIDTH / 2
+    return a["row"] > SCENE_HEIGHT / 2
   if direction == "up":
-    return a["y"] < SCENE_WIDTH / 2
+    return a["row"] < SCENE_HEIGHT / 2
 
 
 types = TypeSystem(["object", "boolean", "action", "direction"])
@@ -178,6 +181,7 @@ initial_lex = Lexicon.fromstring(r"""
   right => N {right}
   horse => N {\x.horse(x)}
   rock => N {\x.rock(x)}
+  rock => N {unique(\x.rock(x))}
   cell => N {\x.true}
   spade => N {\x.spade(x)}
   spade => N {unique(\x.spade(x))}
