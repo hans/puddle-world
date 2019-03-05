@@ -104,16 +104,18 @@ def fn_pick(target):
 
 
 def fn_relate(a, b, direction):
+  return fn_relate_n(a, b, direction, 1)
+
+def fn_relate_n(a, b, direction, n):
   # a is DIRECTION of b
   if direction == "left":
-    return a["col"] < b["col"]
+    return a["row"] == b["row"] and a["col"] == b["col"] - n
   if direction == "right":
-    return a["col"] > b["col"]
+    return a["row"] == b["row"] and a["col"] == b["col"] + n
   if direction == "down":
-    return a["col"] == b["col"] and a["row"] == b["row"] + 1
-    # return a["y"] > b["y"]
+    return a["col"] == b["col"] and a["row"] == b["row"] + n
   if direction == "up":
-    return a["col"] == b["col"] and a["row"] == b["row"] - 1
+    return a["col"] == b["col"] and a["row"] == b["row"] - n
 
 def fn_in_half(obj, direction):
   if direction == "left":
@@ -126,11 +128,12 @@ def fn_in_half(obj, direction):
     return a["row"] < SCENE_HEIGHT / 2
 
 
-types = TypeSystem(["object", "boolean", "action", "direction"])
+types = TypeSystem(["object", "boolean", "action", "direction", "int"])
 
 functions = [
   types.new_function("move", ("object", "action"), fn_pick),
   types.new_function("relate", ("object", "object", "direction", "boolean"), fn_relate),
+  types.new_function("relate_n", ("object", "object", "direction", "int", "boolean"), fn_relate_n),
   types.new_function("unique", (("object", "boolean"), "object"), fn_unique),
   types.new_function("in_half", ("object", "direction", "boolean"), fn_in_half),
   types.new_function("apply", (("object", "boolean"), "object", "boolean"), lambda f, o: f(o)),
@@ -147,6 +150,7 @@ constants = [
   types.new_constant("right", "direction"),
   types.new_constant("up", "direction"),
   types.new_constant("down", "direction"),
+  types.new_constant("1", "int"),
 ]
 
 ontology = Ontology(types, functions, constants)
@@ -172,6 +176,7 @@ initial_lex = Lexicon.fromstring(r"""
   to => N\N/N {\x y.x}
 
   one => S/N/N {\x d.move(unique(\y.relate(x,y,d)))}
+  one => S/N/N {\x d.move(unique(\y.relate_n(x,y,d,1)))}
   right => N/N {\f x.and_(apply(f, x),in_half(x,right))}
 
   the => N/N {\x.unique(x)}
@@ -186,6 +191,7 @@ initial_lex = Lexicon.fromstring(r"""
   spade => N {\x.spade(x)}
   spade => N {unique(\x.spade(x))}
   heart => N {\x.heart(x)}
+  heart => N {unique(\x.heart(x))}
   circle => N {\x.circle(x)}
 """, ontology, include_semantics=True)
 initial_lex.debug_print()
@@ -197,30 +203,31 @@ printCCGDerivation(p.parse("below spade".split())[0])
 
 
 learner = WordLearner(initial_lex)
-instructions = instructions[:3]
-for states_i, objects_i, instruction_i, goal_i in tqdm(zip(states, objects, instructions, goals), total=len(instructions)):
+i = 100
+SKIP = set([0, 3, 10])
+states = states[:i]
+objects = objects[:i]
+instructions = instructions[:i]
+goals = goals[:i]
+for i, (states_i, objects_i, instruction_i, goal_i) in tqdm(enumerate(zip(states, objects, instructions, goals)), total=len(instructions)):
+  print(i)
   print(instruction_i)
+  if i in SKIP:
+    print("\tSKIP")
+    continue
+
   scene = process_scene(states_i, objects_i)
   model = Model(scene, ontology)
+  print(objects_i)
+  # from pprint import pprint
+  # pprint(scene)
   print(goal_i)
-
-  # TESTS = [
-  #     r"unique(\x.spade(x))",
-  #     r"move(unique(\x.spade(x)))",
-  #     r"unique(\y.relate(unique(\x.spade(x)),y,down))",
-  #     r"move(unique(\y.relate(unique(\x.spade(x)),y,down)))",
-  # ]
-  # for test in TESTS:
-  #   print(test, model.evaluate(Expression.fromstring(test)))
-  # sys.exit()
 
   instruction_i = instruction_i.split()
   results = learner.update_with_distant(instruction_i, model, goal_i)
 
   if results:
     printCCGDerivation(results[0][0])
-
-  break
 
 
 print("Lexicon:")
