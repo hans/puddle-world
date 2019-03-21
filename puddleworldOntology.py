@@ -2,7 +2,14 @@
 # Puddleworld Ontology: defines a type system, constants, and predicates available for use
 # in logical forms.
 
+from frozendict import frozendict
+import numpy as np
+
 from pyccg.logic import TypeSystem, Ontology, Expression
+
+
+SCENE_WIDTH = 10
+SCENE_HEIGHT = 10
 
 obj_dict = {
   0: 'grass',
@@ -108,3 +115,14 @@ constants = [
 ]
 
 ontology = Ontology(types, functions, constants)
+
+
+def process_scene(scene_objects):
+  """
+  Convert puddle-world object array into a representation compatible with this
+  ontology.
+  """
+  scene_objects = scene_objects[0]
+  scene_objects = {(row, col): frozendict(row=row, col=col, type=obj_dict[val])
+                   for (row, col), val in np.ndenumerate(scene_objects)}
+  return {"objects": list(scene_objects.values())}
