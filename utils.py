@@ -36,6 +36,7 @@ def convertOntology(ontology):
 	Converts a PyCCG ontology to a list of Dreamcoder primitives.
     Conversion:
    		Ontology Types -> EC baseTypes
+   		Ontology Constants -> EC Primitive (null-valued.)
 		Ontology Functions -> EC Primitives 
 	:return:
 		types: dict from str ontology type names -> EC baseTypes.
@@ -44,10 +45,8 @@ def convertOntology(ontology):
 	# Ontology types -> EC base types.
 	types = {t.name : ec_type.baseType("t_" + t.name) for t in ontology.types if t.name is not None}
 
-	# Constants -> Typed EC Primitives
-	constants = []
-	for c in ontology.constants:
-		print(c.name, c.type)
+	# TODO (cathywong): is this how we want to handle constants.
+	constants = [ec_program.Primitive(c.name, convertType(c.type, types), None) for c in ontology.constants]
 	
 	# Ontology functions -> Typed EC primitives.
 	functions = [convertFunction(f, types) for f in ontology.functions]		
@@ -64,7 +63,16 @@ if __name__ == "__main__":
 	import puddleworldOntology 
 	puddleworldTypes, puddleworldPrimitives = convertOntology(puddleworldOntology.ontology)
 
-	# TODO (cathywong): print the types
+	print("Converted %d types: " % len(puddleworldTypes))
+	for t in puddleworldTypes:
+		print("New base type: %s -> %s" % (str(t), str(puddleworldTypes[t])))
+
+	print("Converted %d Primitives: " % len(puddleworldPrimitives))
+	for p in puddleworldPrimitives:
+		if p.value is None:
+			print("New Primitive from Constant: %s : %s" % (str(p), str(p.tp)))
+		else:
+			print("New Primitive from Function: %s : %s" % (str(p), str(p.tp)))
 
 
 
