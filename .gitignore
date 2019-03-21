@@ -1,3 +1,4 @@
 jobs/
 launchers/
+__pycache__/
 container.img
