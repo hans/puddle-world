@@ -19,21 +19,6 @@ obj_dict = {
   11: 'horse'
 }
 
-class Object(object):
-  def __init__(self, shape, size, material):
-    self.shape = shape
-    self.size = size
-    self.material = material
-
-  def __hash__(self):
-    return hash((self.shape, self.size, self.material))
-
-  def __eq__(self, other):
-    return other.__class__ == self.__class__ and hash(self) == hash(other)
-
-  def __str__(self):
-    return "Object(%s, %s, %s)" % (self.shape, self.size, self.material)
-
 
 def fn_unique(xs):
   # print(xs)
@@ -47,19 +32,6 @@ def fn_exists(xs):
   return len(true_xs) > 0
 
 
-class Action(object):
-  pass
-
-class Move(Action):
-  def __init__(self, target):
-    self.target = target
-
-  def __hash__(self):
-    return hash(tuple("move", self.target))
-  def __str__(self):
-    return "Move(%s)" % self.target
-
-
 def fn_pick(target):
   if isinstance(target, frozendict):
     return (target["row"], target["col"])
@@ -70,6 +42,7 @@ def fn_relate(a, b, direction):
 
 def fn_relate_n(a, b, direction, n):
   # a is DIRECTION of b
+  n = int(n)
   if direction == "left":
     return a["row"] == b["row"] and a["col"] == b["col"] - n
   if direction == "right":
