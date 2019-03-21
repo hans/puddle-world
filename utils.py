@@ -4,31 +4,30 @@ utils.py
 #### If need to add adjacent libraries.
 import sys
 sys.path.insert(0, "../")
+sys.path.insert(0, "../ec/")
 sys.path.insert(0, "../pyccg")
 sys.path.insert(0, "../pyccg/nltk")
 ####
 
-import ec.type as ec_type
-import ec.program as ec_program
-from pyccg.logic import TypeSystem, Ontology, Expression, ComplexType
+import type as ec_type
+import program as ec_program
+from pyccg.logic import TypeSystem, Ontology, Expression, ComplexType, BasicType
+
+
+def convertType(t, ecTypes):
+	"""Converts PyCCG basic and complex types."""
+	if type(t) is BasicType:
+		return ecTypes[t.name]
+	elif type(t) is ComplexType:
+		return ec_type.arrow(convertType(t.first, ecTypes), convertType(t.second, ecTypes))
+
 
 def convertFunction(f, ecTypes):
-	"""
-	Converts a typed PyCCG function into an EC Primitive.
-	:return: ec_type.Primitive
-	"""
-	# TODO(catwong): handle non complex types.
+	"""Converts a typed PyCCG function into an EC Primitive."""
+	ecArgs = [convertType(t, ecTypes) for t in f.arg_types]
+	ecReturn = convertType(f.return_type, ecTypes)
+	ecFunction = ec_program.Primitive(f.name, ec_type.arrow(*ecArgs, ecReturn), f.defn)
 
-	returnType = ecTypes[f.return_type.name] # TODO (catwong): make sure this is correct.
-	for t in f.arg_types:
-		if type(t) is ComplexType:
-			print("TODO (catwong) : handle complex types.")
-			return None
-
-	ecArgs = [ecTypes[t.name] for t in f.arg_types]
-	ecFunction = ec_program.Primitive(f.name, arrow(*ecArgs, returnType), f.defn)
-
-	print(ecFunction)
 	return ecFunction
 
 
@@ -45,14 +44,16 @@ def convertOntology(ontology):
 	# Ontology types -> EC base types.
 	types = {t.name : ec_type.baseType("t_" + t.name) for t in ontology.types if t.name is not None}
 
-	# Create primitives for any of the constants.
+	# Constants -> Typed EC Primitives
+	constants = []
+	for c in ontology.constants:
+		print(c.name, c.type)
 	
 	# Ontology functions -> Typed EC primitives.
-	for f in ontology.functions:
-		convertFunction(f, types)
+	functions = [convertFunction(f, types) for f in ontology.functions]		
 		
 	# Functions have names and types
-	return types, None
+	return types, constants + functions
 
 
 
