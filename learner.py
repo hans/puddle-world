@@ -1,4 +1,6 @@
 #! /usr/bin/env python3
+import logging
+logging.basicConfig(level=logging.DEBUG)
 import operator
 import pickle
 
@@ -114,9 +116,9 @@ def fn_relate_n(a, b, direction, n):
   if direction == "right":
     return a["row"] == b["row"] and a["col"] == b["col"] + n
   if direction == "down":
-    return a["col"] == b["col"] and a["row"] == b["row"] + n
-  if direction == "up":
     return a["col"] == b["col"] and a["row"] == b["row"] - n
+  if direction == "up":
+    return a["col"] == b["col"] and a["row"] == b["row"] + n
 
 def fn_in_half(obj, direction):
   if direction == "left":
@@ -159,8 +161,10 @@ functions = [
   types.new_function("max_in_dir", ("object", "direction", "boolean"), fn_max_in_dir),
   types.new_function("is_edge", ("object", "boolean"), fn_is_edge),
 ]
-def make_obj_fn(obj):
-  return lambda o: o["type"] == obj
+def make_obj_fn(obj_type):
+  def obj_fn(obj):
+    return obj["type"] == obj_type
+  return obj_fn
 functions.extend([types.new_function(obj, ("object", "boolean"), make_obj_fn(obj))
                   for obj in obj_dict.values()])
 
@@ -182,7 +186,7 @@ ontology = Ontology(types, functions, constants)
 
 
 initial_lex = Lexicon.fromstring(r"""
-  :- S, N
+  :- S:N
 
   reach => S/N {\x.move(x)}
   reach => S/N {\x.move(unique(x))}
@@ -206,6 +210,7 @@ initial_lex = Lexicon.fromstring(r"""
 
   left => N {left}
   below => N {down}
+  above => N {up}
   right => N {right}
   horse => N {\x.horse(x)}
   rock => N {\x.rock(x)}
