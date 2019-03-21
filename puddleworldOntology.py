@@ -55,9 +55,9 @@ def fn_relate_n(a, b, direction, n):
   if direction == "right":
     return a["row"] == b["row"] and a["col"] == b["col"] + n
   if direction == "down":
-    return a["col"] == b["col"] and a["row"] == b["row"] - n
-  if direction == "up":
     return a["col"] == b["col"] and a["row"] == b["row"] + n
+  if direction == "up":
+    return a["col"] == b["col"] and a["row"] == b["row"] - n
 
 def fn_in_half(obj, direction):
   if direction == "left":
