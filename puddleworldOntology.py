@@ -2,7 +2,7 @@
 # Puddleworld Ontology: defines a type system, constants, and predicates available for use
 # in logical forms.
 
-from frozendict import frozendict
+# from frozendict import frozendict
 import numpy as np
 
 from pyccg.logic import TypeSystem, Ontology, Expression
@@ -40,8 +40,8 @@ def fn_exists(xs):
 
 
 def fn_pick(target):
-  if isinstance(target, frozendict):
-    return (target["row"], target["col"])
+  # if isinstance(target, frozendict): # TODO(cathywong): change back.
+  return (target["row"], target["col"])
 
 
 def fn_relate(a, b, direction):
