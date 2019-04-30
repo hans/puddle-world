@@ -17,7 +17,7 @@ from pyccg.chart import WeightedCCGChartParser, printCCGDerivation
 from pyccg.lexicon import Lexicon
 from pyccg.logic import TypeSystem, Ontology, Expression, ComplexType, BasicType
 
-
+#### EC <-> PYCCG Ontology Conversion
 def convertType(t, ecTypes):
 	"""Converts PyCCG basic and complex types -> EC Types."""
 	if type(t) is BasicType:
@@ -39,6 +39,8 @@ def convertFunction(f, ecTypes):
 def convertOntology(ontology):
 	"""
 	Converts a PyCCG ontology to a list of Dreamcoder primitives.
+	Adds a tmodel and fn_model_evaluate function, in keeping with PyCCG's model evaluation framework.
+
 	Conversion:
 		Ontology Types -> EC baseTypes
 		Ontology Constants -> EC Primitive (null-valued.)
@@ -48,20 +50,26 @@ def convertOntology(ontology):
 		primitives: list of primtitives with names given by the ontology functions and constants.
 	"""
 	types = {t.name : ec_type.baseType("t_" + t.name) for t in ontology.types if t.name is not None}
-
 	# TODO (cathywong): is this how we want to handle constants.
 	constants = [ec_program.Primitive(c.name, convertType(c.type, types), None) for c in ontology.constants]
 	
-	functions = [convertFunction(f, types) for f in ontology.functions]	
-		
+	# Check for EC versions of these functions.
+	functions = []
+	function_names = { f.name : f for f in ontology.functions }
+	for f in ontology.functions:
+		if 'ec_'+ f.name in function_names.keys():
+			pass
+		else:
+			functions.extend([convertFunction(f, types)])
+	
 	return types, constants + functions
-
+	
 
 if __name__ == "__main__":
 	print("Demo: puddleworld ontology conversion.")
 
-	from puddleworldOntology import ontology
-	puddleworldTypes, puddleworldPrimitives = convertOntology(ontology)
+	from puddleworldOntology import ec_ontology
+	puddleworldTypes, puddleworldPrimitives = convertOntology(ec_ontology)
 
 	if True:
 		print("Converted %d types: " % len(puddleworldTypes))

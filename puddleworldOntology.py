@@ -2,11 +2,12 @@
 # Puddleworld Ontology: defines a type system, constants, and predicates available for use
 # in logical forms.
 
-# from frozendict import frozendict
+from frozendict import frozendict
 import numpy as np
 
 from pyccg.logic import TypeSystem, Ontology, Expression
 
+from utils import 
 
 SCENE_WIDTH = 10
 SCENE_HEIGHT = 10
@@ -26,6 +27,24 @@ obj_dict = {
   11: 'horse'
 }
 
+def ec_fn_tmodel_evaluate(model, expr):
+  """Generic evaluation function to evaluate expression on a PyCCG-style domain."""
+  cf = {}
+  for u in model:
+    try:
+      val = expr(u)
+    except:
+      val = False
+    cf[u] = val
+  return cf
+
+def ec_fn_unique(model, expr):
+  cf = ec_fn_tmodel_evaluate(model, expr)
+  return fn_unique(cf)
+
+def ec_fn_exists(model, expr)
+  cf = ec_fn_tmodel_evaluate(model, expr)
+  return fn_exists(cf)
 
 def fn_unique(xs):
   # print(xs)
@@ -40,8 +59,8 @@ def fn_exists(xs):
 
 
 def fn_pick(target):
-  # if isinstance(target, frozendict): # TODO(cathywong): change back.
-  return (target["row"], target["col"])
+  if isinstance(target, frozendict): 
+    return (target["row"], target["col"])
 
 
 def fn_relate(a, b, direction):
@@ -87,8 +106,7 @@ def fn_is_edge(obj):
   return obj["col"] in [0, SCENE_WIDTH - 1] and obj["row"] in [0, SCENE_HEIGHT - 1]
 
 
-types = TypeSystem(["object", "boolean", "action", "direction", "int"])
-
+types = ["object", "boolean", "action", "direction", "int"]
 functions = [
   types.new_function("move", ("object", "action"), fn_pick),
   types.new_function("relate", ("object", "object", "direction", "boolean"), fn_relate),
@@ -114,7 +132,14 @@ constants = [
   types.new_constant("1", "int"),
 ]
 
-ontology = Ontology(types, functions, constants)
+pyccg_types = TypeSystem(types)
+ontology = Ontology(pyccg_types, functions, constants)
+
+# Add different versions of the functions for EC.
+ec_types = types + ['model']
+ec_functions = functions
+ec_functions.extend("ec_unique", ("model", ("object", "boolean"), "object"), ec_fn_unique)
+ec_ontology = Ontology(ec_types, ec_functions, constants)
 
 
 def process_scene(scene_objects):
