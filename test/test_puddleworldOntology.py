@@ -1,3 +1,5 @@
+from functools import partial
+
 from frozendict import frozendict
 from nose.tools import *
 import numpy as np
@@ -58,13 +60,15 @@ CASES = [
 
 def _test_case(scene, expression, expected, msg=None):
   from pprint import pprint
+  print("Objects:")
   pprint(scene['objects'])
 
   model = Model(scene, ontology)
   expr = Expression.fromstring(expression)
   value = model.evaluate(expr)
-  print(value)
-  print(expected)
+  print(expr)
+  print("Expected:", expected)
+  print("Observed:", value)
 
   eq_(value, expected, msg)
 
@@ -73,5 +77,6 @@ def test_fixed_cases():
   for msg, scene, expression, expected in CASES:
     scene = process_scene([scene])
 
-    _test_case.description = "test case: %s -> %s" % (expression, expected)
-    yield _test_case, scene, expression, expected, msg
+    f = partial(_test_case)
+    f.description = "test case: %s -> %s" % (expression, expected)
+    yield f, scene, expression, expected, msg
