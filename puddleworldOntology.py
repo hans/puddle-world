@@ -7,8 +7,6 @@ import numpy as np
 
 from pyccg.logic import TypeSystem, Ontology, Expression
 
-from utils import 
-
 SCENE_WIDTH = 10
 SCENE_HEIGHT = 10
 
@@ -42,7 +40,7 @@ def ec_fn_unique(model, expr):
   cf = ec_fn_tmodel_evaluate(model, expr)
   return fn_unique(cf)
 
-def ec_fn_exists(model, expr)
+def ec_fn_exists(model, expr):
   cf = ec_fn_tmodel_evaluate(model, expr)
   return fn_exists(cf)
 
@@ -106,7 +104,9 @@ def fn_is_edge(obj):
   return obj["col"] in [0, SCENE_WIDTH - 1] and obj["row"] in [0, SCENE_HEIGHT - 1]
 
 
-types = ["object", "boolean", "action", "direction", "int"]
+type_names = ["object", "boolean", "action", "direction", "int"]
+type_names.extend(['model']) # For EC enumeration on grounded scenes
+types = TypeSystem(type_names)
 functions = [
   types.new_function("move", ("object", "action"), fn_pick),
   types.new_function("relate", ("object", "object", "direction", "boolean"), fn_relate),
@@ -132,14 +132,14 @@ constants = [
   types.new_constant("1", "int"),
 ]
 
-pyccg_types = TypeSystem(types)
-ontology = Ontology(pyccg_types, functions, constants)
+ontology = Ontology(types, functions, constants)
 
-# Add different versions of the functions for EC.
-ec_types = types + ['model']
+# Add model-typed versions of function for EC.
 ec_functions = functions
-ec_functions.extend("ec_unique", ("model", ("object", "boolean"), "object"), ec_fn_unique)
-ec_ontology = Ontology(ec_types, ec_functions, constants)
+ec_functions.extend([
+  types.new_function("ec_unique", ("model", ("object", "boolean"), "object"), ec_fn_unique)
+  ])
+ec_ontology = Ontology(types, ec_functions, constants)
 
 
 def process_scene(scene_objects):
