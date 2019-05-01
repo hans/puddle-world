@@ -64,8 +64,6 @@ def convertOntology(ontology):
 	
 	return types, constants + functions
 
-### Puddleworld Tasks
-
 if __name__ == "__main__":
 	print("Demo: puddleworld ontology conversion.")
 	import numpy as np

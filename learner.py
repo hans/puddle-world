@@ -25,7 +25,7 @@ from puddleworldOntology import ontology, process_scene
 #########
 # Load and prepare dataset.
 
-dataset = loadPuddleWorldTasks("../ec/data/puddleworld/puddleworld.json")
+dataset = loadPuddleWorldTasks("data/puddleworld.json")
 dataset = dataset["local_train"]
 
 lengths = np.array([len(instr.split(" ")) for _, _, instr, _ in dataset])
