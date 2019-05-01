@@ -56,4 +56,9 @@ if __name__ == "__main__":
 	os.system("mkdir -p %s"%outputDirectory)
 
 	# Make tasks.
+	doLocal, doGlobal = args.pop('local'), args.pop('global')
+	localTrain, localTest = makeLocalTasks() if doLocal else [], []
+	globalTrain, globalTest = makeGlobalTasks() if doGlobal else [], []
+	eprint("Using local tasks: %d train, %d test" % (len(localTrain), len(localTest)))
+	eprint("Using global tasks: %d train, %d test" % (len(globalTrain), len(globalTest)))
 
