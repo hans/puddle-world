@@ -62,12 +62,32 @@ def makeLocalTasks(input_type, output_type):
 def makeGlobalTasks(input_type, output_type):
     return makeTasks('global_train', 'global_test', input_type, output_type)
 
+def makeTinyTasks(input_type, output_type, num_tiny=1, tiny_scene_size=2):
+    """Make tiny scenes for bootstrapping and debugging purposes.
+       Scenes are all scene_size x scene_size maps with a single object and that object name as instructions."""
+    from puddleworldOntology import obj_dict
+
+    def makeTinyTask(size):
+        obj = random.Random().choice(range(len(obj_dict)))
+        obj_name = obj_dict[obj]
+        instructions = obj_name 
+        objects = np.zeros((size, size))
+        row, col = random.Random().choice(range(size)), random.Random().choice(range(size))
+        objects[row][col] = obj
+        goal = (row, col)
+        task = (None,  [objects], instructions, goal)
+        task = makePuddleworldTask(task, input_type, output_type)
+        return task
+
+    train, test = [makeTinyTask(tiny_scene_size) for _ in range(num_tiny)], [makeTinyTask(tiny_scene_size) for _ in range(num_tiny)]
+    return train, test
+
 ### Run the learner.
 def puddleworld_options(parser):
     parser.add_argument(
         "--local",
         action="store_true",
-        default=True,
+        default=False,
         help='Include local navigation tasks.'
         )
     parser.add_argument(
@@ -75,6 +95,24 @@ def puddleworld_options(parser):
         action="store_true",
         default=False,
         help='Include global navigation tasks.'
+        )
+    parser.add_argument(
+        "--tiny",
+        action="store_true",
+        default=True,
+        help='Include tiny tasks.'
+        )
+    parser.add_argument(
+        "--num_tiny",
+        default=1,
+        type=int,
+        help='How many tiny tasks to create.'
+        )
+    parser.add_argument(
+        "--tiny_scene_size",
+        default=1,
+        type=int,
+        help='Size of tiny scenes; will be NxN scenes.'
         )
     parser.add_argument("--random-seed", 
         type=int, 
@@ -92,6 +130,8 @@ if __name__ == "__main__":
         CPUs=numberOfCPUs(),
         extras=puddleworld_options)
 
+    N = 1 # TODO(cathywong): decide how many tasks we actually want to do.
+
     # Set up.
     random.seed(args.pop("random_seed"))
     timestamp = datetime.datetime.now().isoformat()
@@ -103,9 +143,23 @@ if __name__ == "__main__":
     input_type, output_type = puddleworldTypes['model'], puddleworldTypes['action']
 
     # Make tasks.
-    doLocal, doGlobal = args.pop('local'), args.pop('global')
+    doLocal, doGlobal, doTiny= args.pop('local'), args.pop('global'), args.pop('tiny')
+    if doTiny:
+        num_tiny, tiny_size = args.pop('num_tiny'), args.pop('tiny_scene_size')
+
     (localTrain, localTest) = makeLocalTasks(input_type, output_type) if doLocal else ([], [])
     (globalTrain, globalTest) = makeGlobalTasks(input_type, output_type) if doGlobal else ([], [])
+    (tinyTrain, tinyTest) = makeTinyTasks(input_type, output_type) if doTiny else ([], [])
+    allTrain, allTest = localTrain + globalTrain + tinyTrain, localTest + globalTest + tinyTest
     eprint("Using local tasks: %d train, %d test" % (len(localTrain), len(localTest)))
     eprint("Using global tasks: %d train, %d test" % (len(globalTrain), len(globalTest)))
+    eprint("Using tiny tasks of size %d: %d train, %d test" % (tiny_size, len(tinyTrain), len(tinyTest)))
+    eprint("Using total tasks: %d train, %d test" % (len(allTrain), len(allTest)))
 
+    # Make grammar.
+    baseGrammar = Grammar.uniform(puddleworldPrimitives)
+    print(baseGrammar.json())
+    # Run EC.
+    task = allTrain[0]
+
+    explorationCompression(baseGrammar, allTrain[:N], testingTasks=allTest[:N], **args)

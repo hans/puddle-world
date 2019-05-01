@@ -166,9 +166,7 @@ if __name__ == "__main__":
 		print(p)
 		print("Eval: %s" % str(p.runWithArguments([scene])))
 		print("\n")
-
 		
-
 
 
 
