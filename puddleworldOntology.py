@@ -28,7 +28,7 @@ obj_dict = {
 def ec_fn_tmodel_evaluate(model, expr):
   """Generic evaluation function to evaluate expression on a PyCCG-style domain."""
   cf = {}
-  for u in model:
+  for u in model['objects']:
     try:
       val = expr(u)
     except:

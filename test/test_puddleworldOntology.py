@@ -1,13 +1,24 @@
+#### If need to add adjacent libraries.
+import sys
+sys.path.insert(0, "../")
+sys.path.insert(0, "../ec/")
+sys.path.insert(0, "../pyccg")
+sys.path.insert(0, "../pyccg/nltk")
+####
+
 from functools import partial
 
 from frozendict import frozendict
 from nose.tools import *
 import numpy as np
 
+import program as ec_program
+
 from pyccg.logic import Expression
 from pyccg.model import Model
 
-from puddleworldOntology import ontology, process_scene
+from utils import convertOntology
+from puddleworldOntology import ontology, ec_ontology, process_scene
 
 
 SIMPLE_SCENE = np.array(
@@ -21,8 +32,6 @@ SIMPLE_SCENE = np.array(
      [0.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0, 0.0, 3.0],
      [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 10.0, 0.0],
      [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
-
-
 
 CASES = [
   ("test basic object predicate",
@@ -152,6 +161,34 @@ CASES = [
 
 ]
 
+EC_EXPRESSIONS = [
+  "(lambda (ec_unique $0 spade))", # test basic object predicate
+  "(lambda (move (ec_unique $0 spade)))", # test pick
+  "(lambda (relate (ec_unique $0 spade) (ec_unique $0 puddle) down))", # test relate down
+  "(lambda (relate (ec_unique $0 puddle) (ec_unique $0 spade) down))", # test relate down
+  "(lambda (relate (ec_unique $0 spade) (ec_unique $0 puddle) up))", # test relate up
+  "(lambda (relate (ec_unique $0 puddle) (ec_unique $0 spade) up))", # test relate up
+  "(lambda (relate (ec_unique $0 rock) (ec_unique $0 star) left))", # test relate left
+  "(lambda (relate (ec_unique $0 rock) (ec_unique $0 puddle) left))", # test relate left
+  "(lambda (relate (ec_unique $0 rock) (ec_unique $0 star) right))", # test relate right
+  "(lambda (relate (ec_unique $0 star) (ec_unique $0 rock) right))", # test relate right
+  "(lambda (relate (ec_unique $0 puddle) (ec_unique $0 rock) right))", # test relate right
+  "(lambda (relate_n (ec_unique $0 star) (ec_unique $0 rock) right 1))", # test relate_n 1
+  "(lambda (relate_n (ec_unique $0 star) (ec_unique $0 spade) up 2))", # test relate_n 2,
+  "(lambda (in_half (ec_unique $0 star) up))", # test in half
+  "(lambda (in_half (ec_unique $0 star) right))", # test in half
+  "(lambda (in_half (ec_unique $0 star) down))", # test in half
+  "(lambda (in_half (ec_unique $0 star) left))", # test in half
+  "(lambda (in_half (ec_unique $0 triangle) up))", # test in half
+  "(lambda (in_half (ec_unique $0 triangle) right))", # test in half
+  "(lambda (in_half (ec_unique $0 triangle) down))", # test in half
+  "(lambda (in_half (ec_unique $0 triangle) left))", # test in half
+  "(lambda (is_edge (ec_unique $0 circle)))", # test is_edge
+  "(lambda (is_edge (ec_unique $0 star)))", # test is_edge
+  "(lambda (is_edge (ec_unique $0 rock)))", # test is_edge
+  "(lambda (is_edge (ec_unique $0 heart)))", # test is_edge
+]
+
 
 def _test_case(scene, expression, expected, msg=None):
   from pprint import pprint
@@ -167,7 +204,6 @@ def _test_case(scene, expression, expected, msg=None):
 
   eq_(value, expected, msg)
 
-
 def test_fixed_cases():
   for msg, scene, expression, expected in CASES:
     scene = process_scene([scene])
@@ -175,3 +211,32 @@ def test_fixed_cases():
     f = partial(_test_case)
     f.description = "test case: %s -> %s" % (expression, expected)
     yield f, scene, expression, expected, msg
+
+def _test_ec_case(scene, ec_expression, expected, msg=None):
+  from pprint import pprint
+  print("Objects:")
+  pprint(scene['objects'])
+
+  puddleworldTypes, puddleworldPrimitives = convertOntology(ec_ontology)
+
+  expr = ec_program.Program.parse(ec_expression)
+  value = expr.runWithArguments([scene])
+  print(expr)
+  print("Expected:", expected)
+  print("Observed:", value)
+  eq_(value, expected, msg)
+
+def test_ec_fixed_cases():
+  for i, (msg, scene, _, expected) in enumerate(CASES):
+    scene = process_scene([scene])
+    if i < len(EC_EXPRESSIONS):
+      expression = EC_EXPRESSIONS[i]
+
+      f = partial(_test_ec_case)
+      f.description = "test case: %s -> %s" % (expression, expected)
+      yield f, scene, expression, expected, msg
+
+
+
+
+
