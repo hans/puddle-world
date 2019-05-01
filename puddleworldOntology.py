@@ -78,13 +78,13 @@ def fn_relate_n(a, b, direction, n):
 
 def fn_in_half(obj, direction):
   if direction == "left":
-    return a["col"] < SCENE_WIDTH / 2
+    return obj["col"] < SCENE_WIDTH / 2
   if direction == "right":
-    return a["col"] > SCENE_WIDTH / 2
+    return obj["col"] > SCENE_WIDTH / 2
   if direction == "down":
-    return a["row"] > SCENE_HEIGHT / 2
+    return obj["row"] > SCENE_HEIGHT / 2
   if direction == "up":
-    return a["row"] < SCENE_HEIGHT / 2
+    return obj["row"] < SCENE_HEIGHT / 2
 
 def fn_max_in_dir(obj, direction):
   # e.g. "bottom most horse"
@@ -101,7 +101,7 @@ def fn_max_in_dir(obj, direction):
 
 def fn_is_edge(obj):
   # true when obj is at the edge of the grid.
-  return obj["col"] in [0, SCENE_WIDTH - 1] and obj["row"] in [0, SCENE_HEIGHT - 1]
+  return obj["col"] in [0, SCENE_WIDTH - 1] or obj["row"] in [0, SCENE_HEIGHT - 1]
 
 
 type_names = ["object", "boolean", "action", "direction", "int"]
@@ -130,6 +130,7 @@ constants = [
   types.new_constant("up", "direction"),
   types.new_constant("down", "direction"),
   types.new_constant("1", "int"),
+  types.new_constant("2", "int"),
 ]
 
 ontology = Ontology(types, functions, constants)
