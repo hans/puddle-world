@@ -17,7 +17,7 @@ from pyccg.chart import WeightedCCGChartParser, printCCGDerivation
 from pyccg.lexicon import Lexicon
 from pyccg.logic import TypeSystem, Ontology, Expression, ComplexType, BasicType
 
-
+#### EC <-> PYCCG Ontology Conversion
 def convertType(t, ecTypes):
 	"""Converts PyCCG basic and complex types -> EC Types."""
 	if type(t) is BasicType:
@@ -39,6 +39,8 @@ def convertFunction(f, ecTypes):
 def convertOntology(ontology):
 	"""
 	Converts a PyCCG ontology to a list of Dreamcoder primitives.
+	Adds a tmodel and fn_model_evaluate function, in keeping with PyCCG's model evaluation framework.
+
 	Conversion:
 		Ontology Types -> EC baseTypes
 		Ontology Constants -> EC Primitive (null-valued.)
@@ -49,19 +51,25 @@ def convertOntology(ontology):
 	"""
 	types = {t.name : ec_type.baseType("t_" + t.name) for t in ontology.types if t.name is not None}
 
-	# TODO (cathywong): is this how we want to handle constants.
-	constants = [ec_program.Primitive(c.name, convertType(c.type, types), None) for c in ontology.constants]
+	constants = [ec_program.Primitive(c.name, convertType(c.type, types), c.name) for c in ontology.constants]
 	
-	functions = [convertFunction(f, types) for f in ontology.functions]	
-		
+	# Check for EC versions of these functions.
+	functions = []
+	function_names = { f.name : f for f in ontology.functions }
+	for f in ontology.functions:
+		if 'ec_'+ f.name in function_names.keys():
+			pass
+		else:
+			functions.extend([convertFunction(f, types)])
+	
 	return types, constants + functions
-
+	
 
 if __name__ == "__main__":
 	print("Demo: puddleworld ontology conversion.")
-
-	from puddleworldOntology import ontology
-	puddleworldTypes, puddleworldPrimitives = convertOntology(ontology)
+	import numpy as np
+	from puddleworldOntology import ec_ontology, process_scene
+	puddleworldTypes, puddleworldPrimitives = convertOntology(ec_ontology)
 
 	if True:
 		print("Converted %d types: " % len(puddleworldTypes))
@@ -77,32 +85,92 @@ if __name__ == "__main__":
 
 	if True:
 		print("Demo: EC2-style evaluations after conversion.")
-		obj1 = {'type' : 'circle'}
-		obj2 = {'type' : 'spade'}
+		SIMPLE_SCENE = np.array(
+    [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 8.0, 2.0],
+     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 7.0, 1.0],
+     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 6.0],
+     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 10.0],
+     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+     [0.0, 0.0, 0.0, 0.0, 0.0, 10.0, 10.0, 5.0, 0.0, 0.0],
+     [0.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0, 0.0, 3.0],
+     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 10.0, 0.0],
+     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
+		scene = process_scene([SIMPLE_SCENE])
 
 		## Single arity functions.
 		# obj_fn
-		p = ec_program.Program.parse("(lambda (circle $0))")
+		obj1 = scene['objects'][0]
+		obj2 = scene['objects'][9]
+		p = ec_program.Program.parse("(lambda (grass $0))")
 		print(p)
 		print("Object: %s , Eval: %r" % (obj1['type'], p.runWithArguments([obj1])))
 		print("Object: %s , Eval: %r" % (obj2['type'], p.runWithArguments([obj2])))
 		print("\n")
 
-		# move
-		target = {'row': 0, 'col': 0}
+		# Test move.
+		obj0 = scene['objects'][0]
 		p = ec_program.Program.parse("(lambda (move $0))")
 		print(p)
-		print("Eval: %s" % str(p.runWithArguments([target])))
+		print("Eval: %s" % str(p.runWithArguments([obj0])))
 		print("\n")
 
 		## Double arity functions.
 		p = ec_program.Program.parse("(lambda (lambda (and_ $0 $1)))")
 		print(p)
 		print(p.runWithArguments([True, False]))
+		print("\n")
 
-		p = ec_program.Program.parse("(and_ (lambda (spade $0)) (lambda (spade $1)))")
+		p = ec_program.Program.parse("(lambda (lambda (and_ $1 (star $0))))")
 		print(p)
-		print(p.runWithArguments([obj1, obj2]))
+		print(p.runWithArguments([True, obj2]))
+		print("\n")
+		
+		# Test basic object predicate.
+		p = ec_program.Program.parse("(lambda (ec_unique $0 spade))")
+		print(p)
+		print("Eval: %s" % str(p.runWithArguments([scene])))
+		print("\n")
+
+		# Test pick.
+		p = ec_program.Program.parse("(lambda (move (ec_unique $0 spade)))")
+		print(p)
+		print("Eval: %s" % str(p.runWithArguments([scene])))
+		print("\n")
+
+		# Test relate down.
+		p = ec_program.Program.parse("(lambda (relate (ec_unique $0 spade) (ec_unique $0 puddle) down))")
+		print(p)
+		print("Eval: %s" % str(p.runWithArguments([scene])))
+		print("\n")
+
+		# Test relate down.
+		p = ec_program.Program.parse("(lambda (relate (ec_unique $0 puddle) (ec_unique $0 spade) down))")
+		print(p)
+		print("Eval: %s" % str(p.runWithArguments([scene])))
+		print("\n")
+
+		# Test relate up.
+		p = ec_program.Program.parse("(lambda (relate (ec_unique $0 spade) (ec_unique $0 puddle) up))")
+		print(p)
+		print("Eval: %s" % str(p.runWithArguments([scene])))
+		print("\n")
+
+		# Test relate up.
+		p = ec_program.Program.parse("(lambda (relate (ec_unique $0 puddle) (ec_unique $0 spade) up))")
+		print(p)
+		print("Eval: %s" % str(p.runWithArguments([scene])))
+		print("\n")
+
+		# Test relate n
+		p = ec_program.Program.parse("(lambda (relate_n (ec_unique $0 star) (ec_unique $0 rock) right 1))")
+		print(p)
+		print("Eval: %s" % str(p.runWithArguments([scene])))
+		print("\n")
+
+		
+
+
 
 
 
