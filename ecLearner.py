@@ -37,7 +37,7 @@ def makePuddleworldTask(raw_task, input_type, output_type):
     scene = process_scene(objects) # Convert into a PyCCG-style scene.
     task = Task(name=instructions,
                 request=arrow(input_type, output_type),
-                examples=[(scene, tuple(goal))],
+                examples=[([scene], tuple(goal))],
                 features=instructions)
     return task
 
@@ -87,7 +87,7 @@ def puddleworld_options(parser):
     parser.add_argument(
         "--local",
         action="store_true",
-        default=False,
+        default=True,
         help='Include local navigation tasks.'
         )
     parser.add_argument(
@@ -99,7 +99,7 @@ def puddleworld_options(parser):
     parser.add_argument(
         "--tiny",
         action="store_true",
-        default=True,
+        default=False,
         help='Include tiny tasks.'
         )
     parser.add_argument(
@@ -130,8 +130,6 @@ if __name__ == "__main__":
         CPUs=numberOfCPUs(),
         extras=puddleworld_options)
 
-    N = 1 # TODO(cathywong): decide how many tasks we actually want to do.
-
     # Set up.
     random.seed(args.pop("random_seed"))
     timestamp = datetime.datetime.now().isoformat()
@@ -144,8 +142,7 @@ if __name__ == "__main__":
 
     # Make tasks.
     doLocal, doGlobal, doTiny= args.pop('local'), args.pop('global'), args.pop('tiny')
-    if doTiny:
-        num_tiny, tiny_size = args.pop('num_tiny'), args.pop('tiny_scene_size')
+    num_tiny, tiny_size = args.pop('num_tiny'), args.pop('tiny_scene_size')
 
     (localTrain, localTest) = makeLocalTasks(input_type, output_type) if doLocal else ([], [])
     (globalTrain, globalTest) = makeGlobalTasks(input_type, output_type) if doGlobal else ([], [])
@@ -160,7 +157,5 @@ if __name__ == "__main__":
     baseGrammar = Grammar.uniform(puddleworldPrimitives)
     print(baseGrammar.json())
     # Run EC.
-    task = allTrain[0]
-    print(task.examples)
 
-    explorationCompression(baseGrammar, allTrain[:N], testingTasks=allTest[:N], **args)
+    explorationCompression(baseGrammar, allTrain, testingTasks=allTest, **args)

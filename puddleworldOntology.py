@@ -12,24 +12,18 @@ SCENE_HEIGHT = 10
 
 obj_dict = {
   0: 'grass',
-  1: 'puddle',
-  2: 'star',
-  3: 'circle',
-  4: 'triangle',
-  5: 'heart',
-  6: 'spade',
-  7: 'diamond',
-  8: 'rock',
-  9: 'tree',
-  10: 'house',
-  11: 'horse'
+  -1: 'puddle',
+  1: 'star',
+  2: 'circle',
+  3: 'triangle',
+  4: 'heart',
+  5: 'spade',
+  6: 'diamond',
+  7: 'rock',
+  8: 'tree',
+  9: 'house',
+  10: 'horse'
 }
-
-def fn_pick_debug(model):
-  return (0, 0)
-
-def fn_pick_debug2(model):
-  return (0, 0)
 
 def ec_fn_tmodel_evaluate(model, expr):
   """Generic evaluation function to evaluate expression on a PyCCG-style domain."""
@@ -51,9 +45,8 @@ def ec_fn_exists(model, expr):
   return fn_exists(cf)
 
 def fn_unique(xs):
-  # print(xs)
   true_xs = [x for x, matches in xs.items() if matches]
-  #assert len(true_xs) == 1 # TODO (CATHY UNCOMMENT)
+  assert len(true_xs) == 1
   return true_xs[0]
 
 def fn_exists(xs):
@@ -145,14 +138,7 @@ ec_functions = functions
 ec_functions.extend([
   types.new_function("ec_unique", ("model", ("object", "boolean"), "object"), ec_fn_unique)
   ])
-ec_functions_debug = [
-    types.new_function("ec_unique", ("model", ("object", "boolean"), "object"), ec_fn_unique),
-    types.new_function("move_debug", ("model", "action"), fn_pick_debug),
-    types.new_function("move_debug2", ("model", "action"), fn_pick_debug2),
-    types.new_function("is_obj", ("object", "boolean"), lambda o : True),
-    types.new_function("move", ("object", "action"), fn_pick),
-]
-ec_ontology = Ontology(types, ec_functions_debug, constants)
+ec_ontology = Ontology(types, ec_functions, constants)
 
 
 def process_scene(scene_objects):
@@ -164,3 +150,20 @@ def process_scene(scene_objects):
   scene_objects = {(row, col): frozendict(row=row, col=col, type=obj_dict[val])
                    for (row, col), val in np.ndenumerate(scene_objects)}
   return {"objects": list(scene_objects.values())}
+
+
+####
+# A tiny DSL for debugging purposes.
+def fn_pick_debug(model):
+  return (0, 0)
+
+def fn_pick_debug2(model):
+  return (0, 0)
+
+ec_functions_debug = [
+    types.new_function("ec_unique", ("model", ("object", "boolean"), "object"), ec_fn_unique),
+    types.new_function("move_debug", ("model", "action"), fn_pick_debug),
+    types.new_function("move_debug2", ("model", "action"), fn_pick_debug2),
+    types.new_function("is_obj", ("object", "boolean"), lambda o : True),
+    types.new_function("move", ("object", "action"), fn_pick),
+]

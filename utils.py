@@ -69,7 +69,7 @@ if __name__ == "__main__":
 	from puddleworldOntology import ec_ontology, process_scene
 	puddleworldTypes, puddleworldPrimitives = convertOntology(ec_ontology)
 
-	if True:
+	if False:
 		print("Converted %d types: " % len(puddleworldTypes))
 		for t in puddleworldTypes:
 			print("New base type: %s -> %s" % (str(t), str(puddleworldTypes[t])))
@@ -82,7 +82,7 @@ if __name__ == "__main__":
 				print("New Primitive from Function: %s : %s" % (str(p), str(p.tp)))
 
 	if True:
-		print("Demo: EC2-style evaluations debugged.")
+		print("Demo: EC2-style evaluations debug DSL.")
 		SIMPLE_SCENE = np.array(
     [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 8.0, 2.0],
      [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 7.0, 1.0],
@@ -110,6 +110,16 @@ if __name__ == "__main__":
 		p = ec_program.Program.parse('(lambda (move (ec_unique $0 is_obj)))')
 		print(p)
 		print("Eval: %s" % str(p.runWithArguments([scene])))
+		print("\n")
+
+		p = ec_program.Program.parse('(lambda (move (ec_unique $0 (lambda (is_obj $0)))))')
+		print(p)
+		print("Eval: %s" % str(p.runWithArguments([scene])))
+		print("\n")
+
+		p = ec_program.Program.parse('(lambda (move (ec_unique $0 (lambda (is_obj $0)))))')
+		print("Eval: %s" % str(p.runWithArguments([scene])))
+		print(p.evaluate([])('test'))
 		print("\n")
 
 	if False:
