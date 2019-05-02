@@ -80,7 +80,7 @@ def makeTinyTasks(input_type, output_type, num_tiny=1, tiny_scene_size=2):
         return task
 
     train, test = [makeTinyTask(tiny_scene_size) for _ in range(num_tiny)], [makeTinyTask(tiny_scene_size) for _ in range(num_tiny)]
-    return train, test
+    return train, []
 
 ### Run the learner.
 def puddleworld_options(parser):
@@ -149,7 +149,7 @@ if __name__ == "__main__":
 
     (localTrain, localTest) = makeLocalTasks(input_type, output_type) if doLocal else ([], [])
     (globalTrain, globalTest) = makeGlobalTasks(input_type, output_type) if doGlobal else ([], [])
-    (tinyTrain, tinyTest) = makeTinyTasks(input_type, output_type) if doTiny else ([], [])
+    (tinyTrain, tinyTest) = makeTinyTasks(input_type, output_type, num_tiny, tiny_size) if doTiny else ([], [])
     allTrain, allTest = localTrain + globalTrain + tinyTrain, localTest + globalTest + tinyTest
     eprint("Using local tasks: %d train, %d test" % (len(localTrain), len(localTest)))
     eprint("Using global tasks: %d train, %d test" % (len(globalTrain), len(globalTest)))
@@ -161,5 +161,6 @@ if __name__ == "__main__":
     print(baseGrammar.json())
     # Run EC.
     task = allTrain[0]
+    print(task.examples)
 
     explorationCompression(baseGrammar, allTrain[:N], testingTasks=allTest[:N], **args)

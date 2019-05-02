@@ -25,6 +25,12 @@ obj_dict = {
   11: 'horse'
 }
 
+def fn_pick_debug(model):
+  return (0, 0)
+
+def fn_pick_debug2(model):
+  return (0, 0)
+
 def ec_fn_tmodel_evaluate(model, expr):
   """Generic evaluation function to evaluate expression on a PyCCG-style domain."""
   cf = {}
@@ -47,9 +53,8 @@ def ec_fn_exists(model, expr):
 def fn_unique(xs):
   # print(xs)
   true_xs = [x for x, matches in xs.items() if matches]
-  assert len(true_xs) == 1
+  #assert len(true_xs) == 1 # TODO (CATHY UNCOMMENT)
   return true_xs[0]
-
 
 def fn_exists(xs):
   true_xs = [x for x, matches in xs.items() if matches]
@@ -140,7 +145,14 @@ ec_functions = functions
 ec_functions.extend([
   types.new_function("ec_unique", ("model", ("object", "boolean"), "object"), ec_fn_unique)
   ])
-ec_ontology = Ontology(types, ec_functions, constants)
+ec_functions_debug = [
+    types.new_function("ec_unique", ("model", ("object", "boolean"), "object"), ec_fn_unique),
+    types.new_function("move_debug", ("model", "action"), fn_pick_debug),
+    types.new_function("move_debug2", ("model", "action"), fn_pick_debug2),
+    types.new_function("is_obj", ("object", "boolean"), lambda o : True),
+    types.new_function("move", ("object", "action"), fn_pick),
+]
+ec_ontology = Ontology(types, ec_functions_debug, constants)
 
 
 def process_scene(scene_objects):
