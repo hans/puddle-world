@@ -25,7 +25,6 @@ def convertType(t, ecTypes):
 	elif type(t) is ComplexType:
 		return ec_type.arrow(convertType(t.first, ecTypes), convertType(t.second, ecTypes))
 
-
 def convertFunction(f, ecTypes):
 	"""Converts a typed PyCCG function -> EC Primitive."""
 	ecArgs = [convertType(t, ecTypes) for t in f.arg_types]
@@ -63,7 +62,6 @@ def convertOntology(ontology):
 			functions.extend([convertFunction(f, types)])
 	
 	return types, constants + functions
-	
 
 if __name__ == "__main__":
 	print("Demo: puddleworld ontology conversion.")
@@ -71,7 +69,7 @@ if __name__ == "__main__":
 	from puddleworldOntology import ec_ontology, process_scene
 	puddleworldTypes, puddleworldPrimitives = convertOntology(ec_ontology)
 
-	if True:
+	if False:
 		print("Converted %d types: " % len(puddleworldTypes))
 		for t in puddleworldTypes:
 			print("New base type: %s -> %s" % (str(t), str(puddleworldTypes[t])))
@@ -84,6 +82,47 @@ if __name__ == "__main__":
 				print("New Primitive from Function: %s : %s" % (str(p), str(p.tp)))
 
 	if True:
+		print("Demo: EC2-style evaluations debug DSL.")
+		SIMPLE_SCENE = np.array(
+    [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 8.0, 2.0],
+     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 7.0, 1.0],
+     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 6.0],
+     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 10.0],
+     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+     [0.0, 0.0, 0.0, 0.0, 0.0, 10.0, 10.0, 5.0, 0.0, 0.0],
+     [0.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0, 0.0, 3.0],
+     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 10.0, 0.0],
+     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
+		
+		scene = process_scene([SIMPLE_SCENE])
+
+		p = ec_program.Program.parse('(lambda (move_debug $0))')
+		print(p)
+		print("Eval: %s" % str(p.runWithArguments([scene])))
+		print("\n")
+
+		p = ec_program.Program.parse('(lambda (move_debug2 $0))')
+		print(p)
+		print("Eval: %s" % str(p.runWithArguments([scene])))
+		print("\n")
+
+		p = ec_program.Program.parse('(lambda (move (ec_unique $0 is_obj)))')
+		print(p)
+		print("Eval: %s" % str(p.runWithArguments([scene])))
+		print("\n")
+
+		p = ec_program.Program.parse('(lambda (move (ec_unique $0 (lambda (is_obj $0)))))')
+		print(p)
+		print("Eval: %s" % str(p.runWithArguments([scene])))
+		print("\n")
+
+		p = ec_program.Program.parse('(lambda (move (ec_unique $0 (lambda (is_obj $0)))))')
+		print("Eval: %s" % str(p.runWithArguments([scene])))
+		print(p.evaluate([])('test'))
+		print("\n")
+
+	if False:
 		print("Demo: EC2-style evaluations after conversion.")
 		SIMPLE_SCENE = np.array(
     [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 8.0, 2.0],
@@ -167,9 +206,7 @@ if __name__ == "__main__":
 		print(p)
 		print("Eval: %s" % str(p.runWithArguments([scene])))
 		print("\n")
-
 		
-
 
 
 
