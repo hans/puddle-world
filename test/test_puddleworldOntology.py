@@ -36,6 +36,11 @@ CASES = [
    r"unique(\x.diamond(x))",
    frozendict(row=2, col=9, type="diamond")),
 
+  ("test basic object predicate",
+   SIMPLE_SCENE,
+   r"unique(diamond)",
+   frozendict(row=2, col=9, type="diamond")),
+
   ("test pick",
    SIMPLE_SCENE,
    r"move(unique(\x.diamond(x)))",
