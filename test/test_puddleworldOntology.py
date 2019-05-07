@@ -159,6 +159,16 @@ CASES = [
    r"is_edge(unique(\x.heart(x)))",
    False),
 
+  ("test complex query",
+   SIMPLE_SCENE,
+   r"house(unique(\x.relate(x,unique(\y.spade(y)),down)))",
+   True),
+
+  ("test complex query",
+   SIMPLE_SCENE,
+   r"house(unique(\x.and_(house(x),relate(x,unique(\y.spade(y)),down))))",
+   True),
+
 ]
 
 EC_EXPRESSIONS = [
