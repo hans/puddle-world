@@ -12,13 +12,10 @@ from frozendict import frozendict
 from nose.tools import *
 import numpy as np
 
-import program as ec_program
-
 from pyccg.logic import Expression
 from pyccg.model import Model
 
-from utils import convertOntology
-from puddleworldOntology import ontology, ec_ontology, process_scene
+from puddleworldOntology import ontology, process_scene
 
 
 SIMPLE_SCENE = np.array(
@@ -36,32 +33,37 @@ SIMPLE_SCENE = np.array(
 CASES = [
   ("test basic object predicate",
    SIMPLE_SCENE,
-   r"unique(\x.spade(x))",
-   frozendict(row=2, col=9, type="spade")),
+   r"unique(\x.diamond(x))",
+   frozendict(row=2, col=9, type="diamond")),
+
+  ("test basic object predicate",
+   SIMPLE_SCENE,
+   r"unique(diamond)",
+   frozendict(row=2, col=9, type="diamond")),
 
   ("test pick",
    SIMPLE_SCENE,
-   r"move(unique(\x.spade(x)))",
+   r"move(unique(\x.diamond(x)))",
    (2, 9)),
 
   ("test relate down",
    SIMPLE_SCENE,
-   r"relate(unique(\x.spade(x)),unique(\x.puddle(x)),down)",
+   r"relate(unique(\x.diamond(x)),unique(\x.star(x)),down)",
    True),
 
   ("test relate down",
    SIMPLE_SCENE,
-   r"relate(unique(\x.puddle(x)),unique(\x.spade(x)),down)",
+   r"relate(unique(\x.star(x)),unique(\x.diamond(x)),down)",
    False),
 
   ("test relate up",
    SIMPLE_SCENE,
-   r"relate(unique(\x.spade(x)),unique(\x.puddle(x)),up)",
+   r"relate(unique(\x.diamond(x)),unique(\x.star(x)),up)",
    False),
 
   ("test relate up",
    SIMPLE_SCENE,
-   r"relate(unique(\x.puddle(x)),unique(\x.spade(x)),up)",
+   r"relate(unique(\x.star(x)),unique(\x.diamond(x)),up)",
    True),
 
   ("test relate left",
@@ -71,7 +73,7 @@ CASES = [
 
   ("test relate left",
    SIMPLE_SCENE,
-   r"relate(unique(\x.rock(x)),unique(\x.puddle(x)),left)",
+   r"relate(unique(\x.star(x)),unique(\x.rock(x)),left)",
    False),
 
   ("test relate right",
@@ -84,11 +86,6 @@ CASES = [
    r"relate(unique(\x.star(x)),unique(\x.rock(x)),right)",
    True),
 
-  ("test relate right",
-   SIMPLE_SCENE,
-   r"relate(unique(\x.puddle(x)),unique(\x.rock(x)),right)",
-   False),
-
   ("test relate_n 1",
    SIMPLE_SCENE,
    r"relate_n(unique(\x.star(x)),unique(\x.rock(x)),right,1)",
@@ -96,7 +93,7 @@ CASES = [
 
   ("test relate_n 2",
    SIMPLE_SCENE,
-   r"relate_n(unique(\x.star(x)),unique(\x.spade(x)),up,2)",
+   r"relate_n(unique(\x.circle(x)),unique(\x.diamond(x)),up,2)",
    True),
 
   ("test in_half",
@@ -121,22 +118,22 @@ CASES = [
 
   ("test in_half",
    SIMPLE_SCENE,
-   r"in_half(unique(\x.triangle(x)),up)",
+   r"in_half(unique(\x.heart(x)),up)",
    False),
 
   ("test in_half",
    SIMPLE_SCENE,
-   r"in_half(unique(\x.triangle(x)),right)",
+   r"in_half(unique(\x.heart(x)),right)",
    False),
 
   ("test in_half",
    SIMPLE_SCENE,
-   r"in_half(unique(\x.triangle(x)),down)",
+   r"in_half(unique(\x.heart(x)),down)",
    True),
 
   ("test in_half",
    SIMPLE_SCENE,
-   r"in_half(unique(\x.triangle(x)),left)",
+   r"in_half(unique(\x.heart(x)),left)",
    True),
 
   ("test is_edge",
@@ -151,13 +148,23 @@ CASES = [
 
   ("test is_edge",
    SIMPLE_SCENE,
-   r"is_edge(unique(\x.rock(x)))",
+   r"is_edge(unique(\x.diamond(x)))",
    True),
 
   ("test is_edge",
    SIMPLE_SCENE,
    r"is_edge(unique(\x.heart(x)))",
    False),
+
+  ("test complex query",
+   SIMPLE_SCENE,
+   r"horse(unique(\x.relate(x,unique(\y.diamond(y)),down)))",
+   True),
+
+  ("test complex query",
+   SIMPLE_SCENE,
+   r"horse(unique(\x.and_(horse(x),relate(x,unique(\y.diamond(y)),down))))",
+   True),
 
 ]
 

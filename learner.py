@@ -42,8 +42,8 @@ initial_lex = Lexicon.fromstring(r"""
 
   reach => S/N {\x.move(x)}
   reach => S/N {\x.move(unique(x))}
-  below => S/N {\x.move(unique(\y.relate(x,y,down)))}
-  above => S/N {\x.move(unique(\y.relate(x,y,up)))}
+  below => S/N {\x.move(unique(\y.relate(y,x,down)))}
+  above => S/N {\x.move(unique(\y.relate(y,x,up)))}
 
   , => S\S/S {\a b.a}
   , => S\S/S {\a b.b}
@@ -52,8 +52,8 @@ initial_lex = Lexicon.fromstring(r"""
   of => N\N/N {\x d y.relate(unique(x),d,y)}
   to => N\N/N {\x y.x}
 
-  one => S/N/N {\x d.move(unique(\y.relate(x,y,d)))}
-  one => S/N/N {\x d.move(unique(\y.relate_n(x,y,d,1)))}
+  one => S/N/N {\d x.move(unique(\y.relate(y,x,d)))}
+  one => S/N/N {\d x.move(unique(\y.relate_n(y,x,d,1)))}
   right => N/N {\f x.and_(apply(f, x),in_half(x,right))}
 
   most => N\N/N {\x d.max_in_dir(x, d)}
@@ -73,6 +73,7 @@ initial_lex = Lexicon.fromstring(r"""
   heart => N {\x.heart(x)}
   heart => N {unique(\x.heart(x))}
   circle => N {\x.circle(x)}
+  # triangle => N {\x.triangle(x)}
 """, ontology, include_semantics=True)
 initial_lex.debug_print()
 
@@ -85,15 +86,18 @@ i = 100
 from pprint import pprint
 for idx in sorted_idxs:
   _, objects_i, instruction_i, goal_i = dataset[idx]
+  goal_i = tuple(goal_i)
+
+  if instruction_i != "one above triangle":
+    continue
+
   print(i)
   print(instruction_i)
 
   scene = process_scene(objects_i)
   model = Model(scene, ontology)
 
-  print(scene)
-  # from pprint import pprint
-  # pprint(scene)
+  print(np.array(objects_i))
   print(goal_i)
 
   instruction_i = instruction_i.split()
