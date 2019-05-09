@@ -68,7 +68,7 @@ def makeTinyTasks(input_type, output_type, num_tiny=1, tiny_scene_size=2):
     from puddleworldOntology import obj_dict
 
     def makeTinyTask(size):
-        obj = random.Random().choice(range(len(obj_dict)))
+        obj = random.Random().choice(range(len(obj_dict) - 1))
         obj_name = obj_dict[obj]
         instructions = obj_name 
         objects = np.zeros((size, size))
