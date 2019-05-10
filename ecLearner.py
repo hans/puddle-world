@@ -17,6 +17,7 @@ import random
 from ec import explorationCompression, commandlineArguments, Task, ecIterator
 from grammar import Grammar
 from utilities import eprint, numberOfCPUs
+from recognition import *
 from task import *
 
 from puddleworldOntology import ec_ontology, process_scene
@@ -82,6 +83,36 @@ def makeTinyTasks(input_type, output_type, num_tiny=1, tiny_scene_size=2):
     train, test = [makeTinyTask(tiny_scene_size) for _ in range(num_tiny)], [makeTinyTask(tiny_scene_size) for _ in range(num_tiny)]
     return train, []
 
+### Basic recurrent feature extractor for the instruction strings.
+class InstructionsFeatureExtractor(RecurrentFeatureExtractor):
+    def tokenize(self, features):
+        """Recurrent feature extractor expects a num_examples [(tokenized_input, tokenized_output)]
+           list, so match this form.
+        """
+        return [(features.lower().split(), [])]
+
+    def build_lexicon(self, tasks, testingTasks):
+        """Lexicon of all tokens that appear in train and test tasks."""
+        lexicon = set()
+        for t in tasks + testingTasks:
+            tokens = self.tokenize(t.features)[0][0]
+            lexicon.update(*tokens)
+        return list(lexicon)
+
+    def __init__(self, tasks, testingTasks=[], cuda=False):
+        self.recomputeTasks = False # TODO(cathywong): probably want to recompute.
+        self.useFeatures = True
+
+        lexicon = self.build_lexicon(tasks, testingTasks)
+        print("Lexicon len, values", len(lexicon), lexicon[:10])
+        super(InstructionsFeatureExtractor, self).__init__(lexicon=lexicon,
+                                                            H=64, # Hidden layer.
+                                                            tasks=tasks,
+                                                            bidirectional=True,
+                                                            cuda=cuda)
+
+
+
 ### Run the learner.
 def puddleworld_options(parser):
     parser.add_argument(
@@ -128,6 +159,7 @@ if __name__ == "__main__":
         a=3, maximumFrontier=10, topK=2, pseudoCounts=30.0,
         helmholtzRatio=0.5, structurePenalty=1.,
         CPUs=numberOfCPUs(),
+        featureExtractor=InstructionsFeatureExtractor,
         extras=puddleworld_options)
 
     # Set up.

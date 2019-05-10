@@ -80,7 +80,7 @@ def getOCamlDefinitions(ont_types, ont_primitives, ontology_name=""):
         # Creates primitive function names with thunk type definitions.
         prim_name, prim_signature = str(p), str(p.tp)
         ocaml_signature = prim_signature.replace('->', '@>')
-        print('ignore(primitive "%s" (%s) (fun x -> x);;)' % (prim_name, ocaml_signature))
+        print('ignore(primitive "%s" (%s) (fun x -> x));;' % (prim_name, ocaml_signature))
 
 
 if __name__ == "__main__":
