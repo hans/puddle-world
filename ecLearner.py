@@ -13,10 +13,12 @@ import datetime
 import numpy as np
 import os
 import random
+import string
 
 from ec import explorationCompression, commandlineArguments, Task, ecIterator
 from grammar import Grammar
 from utilities import eprint, numberOfCPUs
+from recognition import *
 from task import *
 
 from puddleworldOntology import ec_ontology, process_scene
@@ -68,7 +70,7 @@ def makeTinyTasks(input_type, output_type, num_tiny=1, tiny_scene_size=2):
     from puddleworldOntology import obj_dict
 
     def makeTinyTask(size):
-        obj = random.Random().choice(range(len(obj_dict)))
+        obj = random.Random().choice(range(len(obj_dict) - 1))
         obj_name = obj_dict[obj]
         instructions = obj_name 
         objects = np.zeros((size, size))
@@ -81,6 +83,42 @@ def makeTinyTasks(input_type, output_type, num_tiny=1, tiny_scene_size=2):
 
     train, test = [makeTinyTask(tiny_scene_size) for _ in range(num_tiny)], [makeTinyTask(tiny_scene_size) for _ in range(num_tiny)]
     return train, []
+
+### Basic recurrent feature extractor for the instruction strings.
+class InstructionsFeatureExtractor(RecurrentFeatureExtractor):
+    def _tokenize_string(self, features):
+        """Ultra simple tokenizer. Removes punctuation, then splits on spaces."""
+        remove_punctuation = str.maketrans('', '', string.punctuation)
+        tokenized = features.translate(remove_punctuation).lower().split()
+        return tokenized
+
+    def tokenize(self, features):
+        """Recurrent feature extractor expects examples in a [(xs, y)] form where xs -> a list of inputs.
+           list, so match this form.
+        """
+        xs, y = [self._tokenize_string(features)], []
+        return [(xs, y)]
+
+    def build_lexicon(self, tasks, testingTasks):
+        """Lexicon of all tokens that appear in train and test tasks."""
+        lexicon = set()
+        allTasks = tasks + testingTasks
+        for t in allTasks:
+            tokens = self._tokenize_string(t.features)
+            lexicon.update(tokens)
+        return list(lexicon)
+
+    def __init__(self, tasks, testingTasks=[], cuda=False):
+        self.recomputeTasks = False # TODO(cathywong): probably want to recompute.
+        self.useFeatures = True
+
+        lexicon = self.build_lexicon(tasks, testingTasks)
+        print("Lexicon len, values", len(lexicon), lexicon[:10])
+        super(InstructionsFeatureExtractor, self).__init__(lexicon=lexicon,
+                                                            H=64, # Hidden layer.
+                                                            tasks=tasks,
+                                                            bidirectional=True,
+                                                            cuda=cuda)
 
 ### Run the learner.
 def puddleworld_options(parser):
@@ -128,6 +166,7 @@ if __name__ == "__main__":
         a=3, maximumFrontier=10, topK=2, pseudoCounts=30.0,
         helmholtzRatio=0.5, structurePenalty=1.,
         CPUs=numberOfCPUs(),
+        featureExtractor=InstructionsFeatureExtractor,
         extras=puddleworld_options)
 
     # Set up.
@@ -158,4 +197,6 @@ if __name__ == "__main__":
     print(baseGrammar.json())
     # Run EC.
 
-    explorationCompression(baseGrammar, allTrain, testingTasks=allTest, **args)
+    explorationCompression(baseGrammar, allTrain, 
+                            testingTasks=allTest, 
+                            outputPrefix=outputDirectory, **args)
