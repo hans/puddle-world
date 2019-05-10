@@ -13,6 +13,7 @@ import datetime
 import numpy as np
 import os
 import random
+import string
 
 from ec import explorationCompression, commandlineArguments, Task, ecIterator
 from grammar import Grammar
@@ -85,18 +86,26 @@ def makeTinyTasks(input_type, output_type, num_tiny=1, tiny_scene_size=2):
 
 ### Basic recurrent feature extractor for the instruction strings.
 class InstructionsFeatureExtractor(RecurrentFeatureExtractor):
+    def _tokenize_string(self, features):
+        """Ultra simple tokenizer. Removes punctuation, then splits on spaces."""
+        remove_punctuation = str.maketrans('', '', string.punctuation)
+        tokenized = features.translate(remove_punctuation).lower().split()
+        return tokenized
+
     def tokenize(self, features):
-        """Recurrent feature extractor expects a num_examples [(tokenized_input, tokenized_output)]
+        """Recurrent feature extractor expects examples in a [(xs, y)] form where xs -> a list of inputs.
            list, so match this form.
         """
-        return [(features.lower().split(), [])]
+        xs, y = [self._tokenize_string(features)], []
+        return [(xs, y)]
 
     def build_lexicon(self, tasks, testingTasks):
         """Lexicon of all tokens that appear in train and test tasks."""
         lexicon = set()
-        for t in tasks + testingTasks:
-            tokens = self.tokenize(t.features)[0][0]
-            lexicon.update(*tokens)
+        allTasks = tasks + testingTasks
+        for t in allTasks:
+            tokens = self._tokenize_string(t.features)
+            lexicon.update(tokens)
         return list(lexicon)
 
     def __init__(self, tasks, testingTasks=[], cuda=False):
@@ -110,8 +119,6 @@ class InstructionsFeatureExtractor(RecurrentFeatureExtractor):
                                                             tasks=tasks,
                                                             bidirectional=True,
                                                             cuda=cuda)
-
-
 
 ### Run the learner.
 def puddleworld_options(parser):
@@ -190,4 +197,6 @@ if __name__ == "__main__":
     print(baseGrammar.json())
     # Run EC.
 
-    explorationCompression(baseGrammar, allTrain, testingTasks=allTest, **args)
+    explorationCompression(baseGrammar, allTrain, 
+                            testingTasks=allTest, 
+                            outputPrefix=outputDirectory, **args)

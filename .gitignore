@@ -1,6 +1,7 @@
 jobs/
 launchers/
 compressionMessages/
+experimentOutputs/
 __pycache__/
 container.img
 __pycache__
