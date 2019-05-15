@@ -10,12 +10,14 @@ sys.path.insert(0, "../pyccg/nltk")
 ####
 
 import datetime
+import dill
 import numpy as np
 import os
 import random
 import string
 
 from ec import explorationCompression, commandlineArguments, Task, ecIterator
+from taskRankGraphs import plotEmbeddingWithLabels
 from grammar import Grammar
 from utilities import eprint, numberOfCPUs
 from recognition import *
@@ -156,6 +158,9 @@ def puddleworld_options(parser):
         type=int, 
         default=0
         )
+    parser.add_argument("--checkpoint-analysis",
+        default=None,
+        type=str)
 
 if __name__ == "__main__":
     args = commandlineArguments(
@@ -169,34 +174,93 @@ if __name__ == "__main__":
         featureExtractor=InstructionsFeatureExtractor,
         extras=puddleworld_options)
 
-    # Set up.
-    random.seed(args.pop("random_seed"))
-    timestamp = datetime.datetime.now().isoformat()
-    outputDirectory = "experimentOutputs/puddleworld/%s"%timestamp
-    os.system("mkdir -p %s"%outputDirectory)
+    checkpoint_analysis = args.pop("checkpoint_analysis")
 
-    # Convert ontology.
-    puddleworldTypes, puddleworldPrimitives = convertOntology(ec_ontology)
-    input_type, output_type = puddleworldTypes['model'], puddleworldTypes['action']
+    """Run the EC learner."""
+    if checkpoint_analysis is None:
+        # Set up.
+        random.seed(args.pop("random_seed"))
+        timestamp = datetime.datetime.now().isoformat()
+        outputDirectory = "experimentOutputs/puddleworld/%s"%timestamp
+        os.system("mkdir -p %s"%outputDirectory)
 
-    # Make tasks.
-    doLocal, doGlobal, doTiny= args.pop('local'), args.pop('global'), args.pop('tiny')
-    num_tiny, tiny_size = args.pop('num_tiny'), args.pop('tiny_scene_size')
+        # Convert ontology.
+        puddleworldTypes, puddleworldPrimitives = convertOntology(ec_ontology)
+        input_type, output_type = puddleworldTypes['model'], puddleworldTypes['action']
 
-    (localTrain, localTest) = makeLocalTasks(input_type, output_type) if doLocal else ([], [])
-    (globalTrain, globalTest) = makeGlobalTasks(input_type, output_type) if doGlobal else ([], [])
-    (tinyTrain, tinyTest) = makeTinyTasks(input_type, output_type, num_tiny, tiny_size) if doTiny else ([], [])
-    allTrain, allTest = localTrain + globalTrain + tinyTrain, localTest + globalTest + tinyTest
-    eprint("Using local tasks: %d train, %d test" % (len(localTrain), len(localTest)))
-    eprint("Using global tasks: %d train, %d test" % (len(globalTrain), len(globalTest)))
-    eprint("Using tiny tasks of size %d: %d train, %d test" % (tiny_size, len(tinyTrain), len(tinyTest)))
-    eprint("Using total tasks: %d train, %d test" % (len(allTrain), len(allTest)))
+        # Make tasks.
+        doLocal, doGlobal, doTiny= args.pop('local'), args.pop('global'), args.pop('tiny')
+        num_tiny, tiny_size = args.pop('num_tiny'), args.pop('tiny_scene_size')
 
-    # Make grammar.
-    baseGrammar = Grammar.uniform(puddleworldPrimitives)
-    print(baseGrammar.json())
-    # Run EC.
+        (localTrain, localTest) = makeLocalTasks(input_type, output_type) if doLocal else ([], [])
+        (globalTrain, globalTest) = makeGlobalTasks(input_type, output_type) if doGlobal else ([], [])
+        (tinyTrain, tinyTest) = makeTinyTasks(input_type, output_type, num_tiny, tiny_size) if doTiny else ([], [])
+        allTrain, allTest = localTrain + globalTrain + tinyTrain, localTest + globalTest + tinyTest
+        eprint("Using local tasks: %d train, %d test" % (len(localTrain), len(localTest)))
+        eprint("Using global tasks: %d train, %d test" % (len(globalTrain), len(globalTest)))
+        eprint("Using tiny tasks of size %d: %d train, %d test" % (tiny_size, len(tinyTrain), len(tinyTest)))
+        eprint("Using total tasks: %d train, %d test" % (len(allTrain), len(allTest)))
 
-    explorationCompression(baseGrammar, allTrain, 
-                            testingTasks=allTest, 
-                            outputPrefix=outputDirectory, **args)
+        # Make grammar.
+        baseGrammar = Grammar.uniform(puddleworldPrimitives)
+        print(baseGrammar.json())
+        # Run EC.
+
+        explorationCompression(baseGrammar, allTrain, 
+                                testingTasks=allTest, 
+                                outputPrefix=outputDirectory, **args)
+
+    
+
+    ### Checkpoint analyses.
+    if checkpoint_analysis is not None:
+        """Pickle requires loading recognition checkpoints from the original calling file."""
+        # Load the checkpoint.
+        print("Loading checkpoint ", checkpoint_analysis)
+        with open(checkpoint_analysis,'rb') as handle:
+            result = dill.load(handle)
+            recognitionModel = result.recognitionModel
+
+        def plotTSNE(title, labels_embeddings):
+            """Plots TSNE. labels_embeddings = dict from string labels -> embeddings"""
+            from sklearn.manifold import TSNE
+            tsne = TSNE(random_state=0, perplexity=10, learning_rate=150, n_iter=10000)
+            labels = list(labels_embeddings.keys())
+            embeddings = list(labels_embeddings[label] for label in labels_embeddings)
+            print("Clustering %d embeddings of shape: %s" % (len(embeddings), str(embeddings[0].shape)))
+            labels, embeddings = np.array(labels), np.array(embeddings)
+            clustered = tsne.fit_transform(embeddings)
+            plotEmbeddingWithLabels(clustered, 
+                                        labels, 
+                                        title, 
+                                        os.path.join("%s_tsne_labels_1.png" % title.replace(" ", "")))
+
+        #Get the recurrent feature extractor symbol embeddings.
+        plotSymbolEmbeddings = False
+        if plotSymbolEmbeddings:
+            symbolEmbeddings = result.recognitionModel.featureExtractor.symbolEmbeddings()
+            plotTSNE("Symbol embeddings", symbolEmbeddings)
+            # TODO (cathywong): look at a lower level.
+        
+        # # Get recognition model task embeddings.
+        plotTaskEmbeddings = True
+        if plotTaskEmbeddings:
+            def get_task_embeddings(result, embedding_key):
+                task_embeddings = {}
+                for task in result.recognitionTaskMetrics:
+                    task_name = task.name
+                    task_embedding = result.recognitionTaskMetrics[task][embedding_key]
+                    task_embeddings[task_name] = task_embedding
+                return task_embeddings
+            
+            embedding_key = 'taskLogProductions'
+            task_embeddings = get_task_embeddings(result, embedding_key)
+            plotTSNE(embedding_key, task_embeddings)
+
+            embedding_key = 'hiddenState'
+            task_embeddings = get_task_embeddings(result, embedding_key)
+            plotTSNE(embedding_key, task_embeddings)
+
+
+
+
