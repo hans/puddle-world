@@ -244,6 +244,10 @@ def test_ec_fixed_cases():
       yield f, scene, expression, expected, msg
 
 
-
-
-
+def test_iter_expressions():
+  """
+  Make sure some complicated expressions are available in expr iteration
+  """
+  exprs = ontology.iter_expressions(type_request=ontology.types["object", "object", "action"], max_depth=6)
+  exprs = set(str(x) for x in exprs)
+  ok_(r"\z2 z1.move(unique(\z3.relate(z3,z2,z1)))" in exprs)
