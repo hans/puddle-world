@@ -86,6 +86,8 @@ def makeTinyTasks(input_type, output_type, num_tiny=1, tiny_scene_size=2):
     train, test = [makeTinyTask(tiny_scene_size) for _ in range(num_tiny)], [makeTinyTask(tiny_scene_size) for _ in range(num_tiny)]
     return train, []
 
+
+
 ### Basic recurrent feature extractor for the instruction strings.
 class InstructionsFeatureExtractor(RecurrentFeatureExtractor):
     def _tokenize_string(self, features):
@@ -121,6 +123,7 @@ class InstructionsFeatureExtractor(RecurrentFeatureExtractor):
                                                             tasks=tasks,
                                                             bidirectional=True,
                                                             cuda=cuda)
+
 
 ### Run the learner.
 def puddleworld_options(parser):
@@ -163,6 +166,7 @@ def puddleworld_options(parser):
         type=str)
 
 if __name__ == "__main__":
+    # EC command line arguments.
     args = commandlineArguments(
         enumerationTimeout=10, 
         activation='tanh', 
@@ -204,8 +208,8 @@ if __name__ == "__main__":
         # Make grammar.
         baseGrammar = Grammar.uniform(puddleworldPrimitives)
         print(baseGrammar.json())
+        
         # Run EC.
-
         explorationCompression(baseGrammar, allTrain, 
                                 testingTasks=allTest, 
                                 outputPrefix=outputDirectory, **args)
