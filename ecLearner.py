@@ -224,7 +224,7 @@ if __name__ == "__main__":
         def plotTSNE(title, labels_embeddings):
             """Plots TSNE. labels_embeddings = dict from string labels -> embeddings"""
             from sklearn.manifold import TSNE
-            tsne = TSNE(random_state=0, perplexity=10, learning_rate=150, n_iter=10000)
+            tsne = TSNE(random_state=0, perplexity=5, learning_rate=50, n_iter=10000)
             labels = list(labels_embeddings.keys())
             embeddings = list(labels_embeddings[label] for label in labels_embeddings)
             print("Clustering %d embeddings of shape: %s" % (len(embeddings), str(embeddings[0].shape)))
@@ -233,7 +233,7 @@ if __name__ == "__main__":
             plotEmbeddingWithLabels(clustered, 
                                         labels, 
                                         title, 
-                                        os.path.join("%s_tsne_labels_1.png" % title.replace(" ", "")))
+                                        os.path.join("%s_tsne_labels_600_r.png" % title.replace(" ", "")))
 
         #Get the recurrent feature extractor symbol embeddings.
         plotSymbolEmbeddings = False
@@ -242,24 +242,47 @@ if __name__ == "__main__":
             plotTSNE("Symbol embeddings", symbolEmbeddings)
             # TODO (cathywong): look at a lower level.
         
+        plotWordHiddenState = True
+        if plotWordHiddenState:
+            # Get the lexicon and turn them into 'tasks.'
+            lexicon = [word for word in result.recognitionModel.featureExtractor.lexicon if word not in result.recognitionModel.featureExtractor.specialSymbols]
+            print(lexicon)
+            lexicon_tasks = [Task(name=None,
+                request=None,
+                examples=[([1],[1])],
+                features=word) for word in lexicon]
+
+            # Do a weird hacky thing where we turn them into tasks.
+            symbolEmbeddings = result.recognitionModel.taskGrammarFeatureLogProductions(lexicon_tasks)
+            plotTSNE("word_log_productions", symbolEmbeddings)
+
         # # Get recognition model task embeddings.
-        plotTaskEmbeddings = True
+        plotTaskEmbeddings = False
         if plotTaskEmbeddings:
             def get_task_embeddings(result, embedding_key):
                 task_embeddings = {}
                 for task in result.recognitionTaskMetrics:
-                    task_name = task.name
-                    task_embedding = result.recognitionTaskMetrics[task][embedding_key]
-                    task_embeddings[task_name] = task_embedding
+                    if embedding_key in result.recognitionTaskMetrics[task].keys():
+                        task_name = task.name
+                        task_embedding = result.recognitionTaskMetrics[task][embedding_key]
+                        task_embeddings[task_name] = task_embedding
+                if len(task_embeddings.keys()) == 0:
+                    print("No embeddings for key found, ", embedding_key)
+                    assert False
                 return task_embeddings
             
-            embedding_key = 'taskLogProductions'
-            task_embeddings = get_task_embeddings(result, embedding_key)
-            plotTSNE(embedding_key, task_embeddings)
+            # embedding_key = 'taskLogProductions'
+            # task_embeddings = get_task_embeddings(result, embedding_key)
+            # plotTSNE(embedding_key, task_embeddings)
 
-            embedding_key = 'hiddenState'
-            task_embeddings = get_task_embeddings(result, embedding_key)
-            plotTSNE(embedding_key, task_embeddings)
+            # embedding_key = 'hiddenState'
+            # task_embeddings = get_task_embeddings(result, embedding_key)
+            # plotTSNE(embedding_key, task_embeddings)
+
+            # If heldout task log productions
+            # embedding_key = 'heldoutTaskLogProductions'
+            # task_embeddings = get_task_embeddings(result, embedding_key)
+            # plotTSNE(embedding_key, task_embeddings)
 
 
 
