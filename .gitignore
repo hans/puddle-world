@@ -1,4 +1,5 @@
 jobs/
+bin/
 launchers/
 compressionMessages/
 experimentOutputs/
