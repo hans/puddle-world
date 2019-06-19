@@ -212,9 +212,13 @@ if __name__ == "__main__":
 
     
 
-    ### Checkpoint analyses.
+
+
+
+
+    ### Checkpoint analyses. Can be safely ignored to run the learner itself.
+    # These are in this file because Dill is silly and requires loading from the original calling file.
     if checkpoint_analysis is not None:
-        """Pickle requires loading recognition checkpoints from the original calling file."""
         # Load the checkpoint.
         print("Loading checkpoint ", checkpoint_analysis)
         with open(checkpoint_analysis,'rb') as handle:
@@ -233,15 +237,15 @@ if __name__ == "__main__":
             plotEmbeddingWithLabels(clustered, 
                                         labels, 
                                         title, 
-                                        os.path.join("%s_tsne_labels_600_r.png" % title.replace(" ", "")))
+                                        os.path.join("%s_tsne_labels.png" % title.replace(" ", ""))) # TODO(catwong): change output to take commandline. 
 
-        #Get the recurrent feature extractor symbol embeddings.
+        # Get the recurrent feature extractor symbol embeddings.
         plotSymbolEmbeddings = False
         if plotSymbolEmbeddings:
             symbolEmbeddings = result.recognitionModel.featureExtractor.symbolEmbeddings()
             plotTSNE("Symbol embeddings", symbolEmbeddings)
-            # TODO (cathywong): look at a lower level.
         
+        # Plot the word-specific log productions.
         plotWordHiddenState = True
         if plotWordHiddenState:
             # Get the lexicon and turn them into 'tasks.'
@@ -252,11 +256,11 @@ if __name__ == "__main__":
                 examples=[([1],[1])],
                 features=word) for word in lexicon]
 
-            # Do a weird hacky thing where we turn them into tasks.
+            # Hacky! Turn words into tasks to reuse existing code that extracts out the productions from tasks.
             symbolEmbeddings = result.recognitionModel.taskGrammarFeatureLogProductions(lexicon_tasks)
             plotTSNE("word_log_productions", symbolEmbeddings)
 
-        # # Get recognition model task embeddings.
+        # Get other layers in the recognition model task (sentence-level) embeddings.
         plotTaskEmbeddings = False
         if plotTaskEmbeddings:
             def get_task_embeddings(result, embedding_key):
@@ -271,18 +275,18 @@ if __name__ == "__main__":
                     assert False
                 return task_embeddings
             
-            # embedding_key = 'taskLogProductions'
-            # task_embeddings = get_task_embeddings(result, embedding_key)
-            # plotTSNE(embedding_key, task_embeddings)
+            embedding_key = 'taskLogProductions'
+            task_embeddings = get_task_embeddings(result, embedding_key)
+            plotTSNE(embedding_key, task_embeddings)
 
-            # embedding_key = 'hiddenState'
-            # task_embeddings = get_task_embeddings(result, embedding_key)
-            # plotTSNE(embedding_key, task_embeddings)
+            embedding_key = 'hiddenState'
+            task_embeddings = get_task_embeddings(result, embedding_key)
+            plotTSNE(embedding_key, task_embeddings)
 
             # If heldout task log productions
-            # embedding_key = 'heldoutTaskLogProductions'
-            # task_embeddings = get_task_embeddings(result, embedding_key)
-            # plotTSNE(embedding_key, task_embeddings)
+            embedding_key = 'heldoutTaskLogProductions'
+            task_embeddings = get_task_embeddings(result, embedding_key)
+            plotTSNE(embedding_key, task_embeddings)
 
 
 
