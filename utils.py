@@ -8,16 +8,18 @@ sys.path.insert(0, "../ec/")
 sys.path.insert(0, "../pyccg")
 sys.path.insert(0, "../pyccg/nltk")
 ####
+import string
 
 import type as ec_type
 import program as ec_program
 from utilities import curry
 
 from pyccg.chart import WeightedCCGChartParser, printCCGDerivation
+from pyccg.model import Model
 from pyccg.lexicon import Lexicon
 from pyccg.logic import TypeSystem, Ontology, Expression, ComplexType, BasicType
 
-#### EC <-> PYCCG Ontology Conversion
+#### PyCCG Ontology <-> EC Ontology Conversion
 def convertType(t, ecTypes):
     """Converts PyCCG basic and complex types -> EC Types."""
     if type(t) is BasicType:
@@ -81,6 +83,22 @@ def getOCamlDefinitions(ont_types, ont_primitives, ontology_name=""):
         prim_name, prim_signature = str(p), str(p.tp)
         ocaml_signature = prim_signature.replace('->', '@>')
         print('ignore(primitive "%s" (%s) (fun x -> x));;' % (prim_name, ocaml_signature))
+
+
+### EC to PyCCG convenience conversions
+def ecTaskAsPyCCGUpdate(task, ontology):
+    """
+    Converts an EC task into a PyCCG update.
+    Assumes the task has a single scene and the instructions as a string.
+    :return:
+        tokenized_instruction, model, goal.
+    """
+    remove_punctuation = str.maketrans('', '', string.punctuation)
+    tokenized = task.features.translate(remove_punctuation).lower().split()
+    
+    scene, goal = task.examples[0] # Unpack the examples.
+    scene, goal = scene[0], goal
+    return tokenized, Model(scene, ontology), goal
 
 
 if __name__ == "__main__":

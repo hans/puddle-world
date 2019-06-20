@@ -25,6 +25,7 @@ from recognition import *
 from task import *
 
 from puddleworldOntology import ec_ontology, process_scene
+from learner import initial_lex
 from utils import convertOntology
 
 #### Utility functions to load and prepare dataset for EC.
@@ -272,13 +273,17 @@ if __name__ == "__main__":
         print(baseGrammar.json())
 
         # Initialize the language learner driver.
+        ##### DEBUGGING (cathy)
         # (note: cathy - to debug, jankily run with made up arguments, but we don't actually wanna do that,)
 
 
+        assert False
+        ##### DEBUGGING (cathy)
+        ##### DEBUGGING UNCOMMENT BELOW WHEN DONE (cathy)
         # Run Dreamcoder exploration/compression.
-        explorationCompression(baseGrammar, allTrain, 
-                                testingTasks=allTest, 
-                                outputPrefix=outputDirectory, **args)
+        # explorationCompression(baseGrammar, allTrain, 
+        #                         testingTasks=allTest, 
+        #                         outputPrefix=outputDirectory, **args)
 
     
 
