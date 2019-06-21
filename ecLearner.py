@@ -17,79 +17,26 @@ import random
 import string
 
 from ec import explorationCompression, commandlineArguments, Task, ecIterator
+from enumeration import * # EC enumeration.
 from taskRankGraphs import plotEmbeddingWithLabels
 from grammar import Grammar
 from utilities import eprint, numberOfCPUs
 from recognition import *
 from task import *
 
+from pyccg.lexicon import Lexicon
+from pyccg.word_learner import WordLearner
+
 from puddleworldOntology import ec_ontology, process_scene
-from utils import convertOntology
-
-#### Load and prepare dataset for EC.
-def loadPuddleWorldTasks(datafile='data/puddleworld.json'):
-    """
-    Loads a pre-processed version of the Puddleworld tasks.
-    """
-    import json
-    with open(datafile) as f:
-        result = json.load(f)
-    return result
-
-def makePuddleworldTask(raw_task, input_type, output_type):
-    _, objects, instructions, goal = raw_task
-    scene = process_scene(objects) # Convert into a PyCCG-style scene.
-    task = Task(name=instructions,
-                request=arrow(input_type, output_type),
-                examples=[([scene], tuple(goal))],
-                features=instructions)
-    return task
-
- 
-def makeTasks(train_key, test_key, input_type, output_type):
-    data = loadPuddleWorldTasks()
-    raw_train, raw_test = data[train_key], data[test_key]
-
-    # Sort by description length.
-    def sort_by_instruction(dataset):
-        lengths = np.array([len(instr.split(" ")) for _, _, instr, _ in dataset])
-        sorted_idxs = lengths.argsort()
-        return [dataset[idx] for idx in sorted_idxs]
- 
-    sorted_train, sorted_test = sort_by_instruction(raw_train), sort_by_instruction(raw_test)
-    train, test = [makePuddleworldTask(task, input_type, output_type) for task in sorted_train], [makePuddleworldTask(task, input_type, output_type) for task in sorted_test]
-    return train, test
-
-def makeLocalTasks(input_type, output_type):
-    return makeTasks('local_train', 'local_test', input_type, output_type)
-
-def makeGlobalTasks(input_type, output_type):
-    return makeTasks('global_train', 'global_test', input_type, output_type)
-
-def makeTinyTasks(input_type, output_type, num_tiny=1, tiny_scene_size=2):
-    """Make tiny scenes for bootstrapping and debugging purposes.
-       Scenes are all scene_size x scene_size maps with a single object and that object name as instructions."""
-    from puddleworldOntology import obj_dict
-
-    def makeTinyTask(size):
-        obj = random.Random().choice(range(len(obj_dict) - 1))
-        obj_name = obj_dict[obj]
-        instructions = obj_name 
-        objects = np.zeros((size, size))
-        row, col = random.Random().choice(range(size)), random.Random().choice(range(size))
-        objects[row][col] = obj
-        goal = (row, col)
-        task = (None,  [objects], instructions, goal)
-        task = makePuddleworldTask(task, input_type, output_type)
-        return task
-
-    train, test = [makeTinyTask(tiny_scene_size) for _ in range(num_tiny)], [makeTinyTask(tiny_scene_size) for _ in range(num_tiny)]
-    return train, []
+from puddleworldTasks import *
+from utils import convertOntology, ecTaskAsPyCCGUpdate
 
 
-
-### Basic recurrent feature extractor for the instruction strings.
 class InstructionsFeatureExtractor(RecurrentFeatureExtractor):
+    """
+    InstructionsFeatureExtractor: minimal EC-recogntition-model feature extractor for the instruction strings.
+    """
+
     def _tokenize_string(self, features):
         """Ultra simple tokenizer. Removes punctuation, then splits on spaces."""
         remove_punctuation = str.maketrans('', '', string.punctuation)
@@ -124,8 +71,116 @@ class InstructionsFeatureExtractor(RecurrentFeatureExtractor):
                                                             bidirectional=True,
                                                             cuda=cuda)
 
+### PyCCG Word Learner
+initial_puddleworld_lex = Lexicon.fromstring(r"""
+  :- S:N
 
-### Run the learner.
+  reach => S/N {\x.move(x)}
+  reach => S/N {\x.move(unique(x))}
+  below => S/N {\x.move(unique(\y.relate(y,x,down)))}
+  above => S/N {\x.move(unique(\y.relate(y,x,up)))}
+
+  , => S\S/S {\a b.a}
+  , => S\S/S {\a b.b}
+
+  of => N\N/N {\x d y.relate(x,y,d)}
+  of => N\N/N {\x d y.relate(unique(x),d,y)}
+  to => N\N/N {\x y.x}
+
+  one => S/N/N {\d x.move(unique(\y.relate(y,x,d)))}
+  one => S/N/N {\d x.move(unique(\y.relate_n(y,x,d,1)))}
+  right => N/N {\f x.and_(apply(f, x),in_half(x,right))}
+
+  most => N\N/N {\x d.max_in_dir(x, d)}
+
+  the => N/N {\x.unique(x)}
+
+  left => N {left}
+  below => N {down}
+  above => N {up}
+  right => N {right}
+  horse => N {\x.horse(x)}
+  rock => N {\x.rock(x)}
+  rock => N {unique(\x.rock(x))}
+  cell => N {\x.true}
+  spade => N {\x.spade(x)}
+  spade => N {unique(\x.spade(x))}
+  heart => N {\x.heart(x)}
+  heart => N {unique(\x.heart(x))}
+  circle => N {\x.circle(x)}
+  # triangle => N {\x.triangle(x)}
+""", ec_ontology, include_semantics=True)
+
+class ECLanguageLearner:
+    """
+    ECLanguageLearner: driver class that manages learning between PyCCG and EC.
+    """
+    def __init__(self,
+                pyccg_learner):
+                self.pyccg_learner = pyccg_learner
+
+    def _update_pyccg_timeout(self, update, timeout):
+        import time
+        import multiprocessing
+        
+
+
+
+    def _update_pyccg_with_distant_batch(self, tasks, timeout):
+        """
+        Sequential update of PyCCG with distant batch. Returns discovered parses.
+        Ret:
+            pyccg_meanings: dict from task -> PyCCG meanings for the sentence, 
+                            or None if no expression was found.
+        """
+        pyccg_meanings = {t: _update_pyccg_timeout(ecTaskAsPyCCGUpdate(task), timeout) for t in tasks}
+        return pyccg_meanings
+
+    def _pyccg_meanings_to_ec_frontiers(self, pyccg_meanings):
+        """
+        Ret:
+            pyccg_frontiers: dict from task -> Dreamcoder frontiers.
+        """
+        return None
+
+    def wake_generative_with_pyccg(self,
+                    grammar, tasks, 
+                    maximumFrontier=None,
+                    enumerationTimeout=None,
+                    CPUs=None,
+                    solver=None,
+                    evaluationTimeout=None):
+        """
+        Dreamcoder wake_generative using PYCCG enumeration to guide exploration.
+
+        Enumerates from PyCCG with a timeout and blindly from the EC grammar.
+        Updates PyCCG using both sets of discovered meanings.
+        Converts the meanings into EC-style frontiers to be handed off to EC.
+        """
+        # Enumerate PyCCG meanings and update the word learner.
+        pyccg_meanings = self._update_pyccg_with_distant_batch(tasks, enumerationTimeout)
+
+        # Enumerate the remaining tasks using EC-style blind enumeration.
+        unsolved_tasks = [task for task in tasks if pyccg_meanings[task] is None]
+        fallback_frontiers, fallback_times = multicoreEnumeration(grammar, tasks, 
+                                                   maximumFrontier=maximumFrontier,
+                                                   enumerationTimeout=enumerationTimeout,
+                                                   CPUs=CPUs,
+                                                   solver=solver,
+                                                   evaluationTimeout=evaluationTimeout)
+        # Update PyCCG model with fallback discovered frontiers.
+                # TODO(catwong): Just create the SExpressions here since they aren't 'meanings'.
+                # TODO: just update_with_supervised one at a time in a loop.
+
+        # Convert and consolidate PyCCG meanings and fallback frontiers for handoff to EC.
+        pyccg_frontiers = self._pyccg_meanings_to_ec_frontiers(pyccg_meanings)
+        all_frontiers = {t : pyccg_frontiers[t] if t in pyccg_frontiers else fallback_frontiers[t]}
+        all_times = {t : enumerationTimeout if t in pyccg_frontiers else fallback_times[t]}
+
+        return all_frontiers, all_times
+            
+
+### Additional command line arguments for Puddleworld.
 def puddleworld_options(parser):
     parser.add_argument(
         "--local",
@@ -178,21 +233,21 @@ if __name__ == "__main__":
         featureExtractor=InstructionsFeatureExtractor,
         extras=puddleworld_options)
 
-    checkpoint_analysis = args.pop("checkpoint_analysis")
+    checkpoint_analysis = args.pop("checkpoint_analysis") # EC checkpoints need to be run out of their calling files, so this is here.
 
     """Run the EC learner."""
     if checkpoint_analysis is None:
-        # Set up.
+        # Set up output directories.
         random.seed(args.pop("random_seed"))
         timestamp = datetime.datetime.now().isoformat()
         outputDirectory = "experimentOutputs/puddleworld/%s"%timestamp
         os.system("mkdir -p %s"%outputDirectory)
 
-        # Convert ontology.
+        # Convert pyccg ontology -> Dreamcoder.
         puddleworldTypes, puddleworldPrimitives = convertOntology(ec_ontology)
         input_type, output_type = puddleworldTypes['model'], puddleworldTypes['action']
 
-        # Make tasks.
+        # Convert sentences-scenes -> Dreamcoder style tasks.
         doLocal, doGlobal, doTiny= args.pop('local'), args.pop('global'), args.pop('tiny')
         num_tiny, tiny_size = args.pop('num_tiny'), args.pop('tiny_scene_size')
 
@@ -205,14 +260,31 @@ if __name__ == "__main__":
         eprint("Using tiny tasks of size %d: %d train, %d test" % (tiny_size, len(tinyTrain), len(tinyTest)))
         eprint("Using total tasks: %d train, %d test" % (len(allTrain), len(allTest)))
 
-        # Make grammar.
+        # Make Dreamcoder grammar.
         baseGrammar = Grammar.uniform(puddleworldPrimitives)
         print(baseGrammar.json())
-        
-        # Run EC.
-        explorationCompression(baseGrammar, allTrain, 
-                                testingTasks=allTest, 
-                                outputPrefix=outputDirectory, **args)
+
+        # Initialize the language learner driver.
+        ##### DEBUGGING (cathy)
+        # (note: cathy - to debug, jankily run with made up arguments, but we don't actually wanna do that,)
+        pyccg_learner = WordLearner(initial_puddleworld_lex)
+        learner = ECLanguageLearner(pyccg_learner)
+
+        tasks, maximumFrontier, enumerationTimeout, CPUs, solver, evaluationTimeout = localTrain[5], 2, 5, 1, 'python', 5
+        learner.wake_generative_with_pyccg(baseGrammar, tasks, 
+                    maximumFrontier,
+                    enumerationTimeout,
+                    CPUs,
+                    solver,
+                    evaluationTimeout)
+
+        assert False
+        ##### DEBUGGING (cathy)
+        ##### DEBUGGING UNCOMMENT BELOW WHEN DONE (cathy)
+        # Run Dreamcoder exploration/compression.
+        # explorationCompression(baseGrammar, allTrain, 
+        #                         testingTasks=allTest, 
+        #                         outputPrefix=outputDirectory, **args)
 
     
 

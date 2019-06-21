@@ -15,7 +15,13 @@ import numpy as np
 from pyccg.logic import Expression
 from pyccg.model import Model
 
-from puddleworldOntology import ontology, process_scene
+from ec import Task
+from type import arrow
+import program as ec_program
+
+from puddleworldOntology import ontology, ec_ontology, process_scene
+from utils import ecTaskAsPyCCGUpdate, convertOntology
+
 
 
 SIMPLE_SCENE = np.array(
@@ -169,31 +175,31 @@ CASES = [
 ]
 
 EC_EXPRESSIONS = [
-  "(lambda (ec_unique $0 spade))", # test basic object predicate
-  "(lambda (move (ec_unique $0 spade)))", # test pick
-  "(lambda (relate (ec_unique $0 spade) (ec_unique $0 puddle) down))", # test relate down
-  "(lambda (relate (ec_unique $0 puddle) (ec_unique $0 spade) down))", # test relate down
-  "(lambda (relate (ec_unique $0 spade) (ec_unique $0 puddle) up))", # test relate up
-  "(lambda (relate (ec_unique $0 puddle) (ec_unique $0 spade) up))", # test relate up
-  "(lambda (relate (ec_unique $0 rock) (ec_unique $0 star) left))", # test relate left
-  "(lambda (relate (ec_unique $0 rock) (ec_unique $0 puddle) left))", # test relate left
-  "(lambda (relate (ec_unique $0 rock) (ec_unique $0 star) right))", # test relate right
-  "(lambda (relate (ec_unique $0 star) (ec_unique $0 rock) right))", # test relate right
-  "(lambda (relate (ec_unique $0 puddle) (ec_unique $0 rock) right))", # test relate right
-  "(lambda (relate_n (ec_unique $0 star) (ec_unique $0 rock) right 1))", # test relate_n 1
-  "(lambda (relate_n (ec_unique $0 star) (ec_unique $0 spade) up 2))", # test relate_n 2,
-  "(lambda (in_half (ec_unique $0 star) up))", # test in half
-  "(lambda (in_half (ec_unique $0 star) right))", # test in half
-  "(lambda (in_half (ec_unique $0 star) down))", # test in half
-  "(lambda (in_half (ec_unique $0 star) left))", # test in half
-  "(lambda (in_half (ec_unique $0 triangle) up))", # test in half
-  "(lambda (in_half (ec_unique $0 triangle) right))", # test in half
-  "(lambda (in_half (ec_unique $0 triangle) down))", # test in half
-  "(lambda (in_half (ec_unique $0 triangle) left))", # test in half
-  "(lambda (is_edge (ec_unique $0 circle)))", # test is_edge
-  "(lambda (is_edge (ec_unique $0 star)))", # test is_edge
-  "(lambda (is_edge (ec_unique $0 rock)))", # test is_edge
-  "(lambda (is_edge (ec_unique $0 heart)))", # test is_edge
+  "(lambda (ec_unique_p $0 spade_p))", # test basic object predicate
+  "(lambda (move_p (ec_unique_p $0 spade_p)))", # test pick
+  "(lambda (relate_p (ec_unique_p $0 spade_p) (ec_unique_p $0 puddle_p) down_p))", # test relate down
+  "(lambda (relate_p (ec_unique_p $0 puddle_p) (ec_unique_p $0 spade_p) down_p))", # test relate down
+  "(lambda (relate_p (ec_unique_p $0 spade_p) (ec_unique_p $0 puddle_p) up_p))", # test relate up
+  "(lambda (relate_p (ec_unique_p $0 puddle_p) (ec_unique_p $0 spade_p) up_p))", # test relate up
+  "(lambda (relate_p (ec_unique_p $0 rock_p) (ec_unique_p $0 star_p) left_p))", # test relate left
+  "(lambda (relate_p (ec_unique_p $0 rock_p) (ec_unique_p $0 puddle_p) left_p))", # test relate left
+  "(lambda (relate_p (ec_unique_p $0 rock_p) (ec_unique_p $0 star_p) right_p))", # test relate right
+  "(lambda (relate_p (ec_unique_p $0 star_p) (ec_unique_p $0 rock_p) right_p))", # test relate right
+  "(lambda (relate_p (ec_unique_p $0 puddle_p) (ec_unique_p $0 rock_p) right_p))", # test relate right
+  "(lambda (relate_n_p (ec_unique_p $0 star_p) (ec_unique_p $0 rock_p) right 1))", # test relate_n 1
+  "(lambda (relate_n_p (ec_unique_p $0 star_p) (ec_unique_p $0 spade_p) up 2))", # test relate_n 2,
+  "(lambda (in_half_p (ec_unique_p $0 star_p) up_p))", # test in half
+  "(lambda (in_half_p (ec_unique_p $0 star_p) right_p))", # test in half
+  "(lambda (in_half_p (ec_unique_p $0 star_p) down_p))", # test in half
+  "(lambda (in_half_p (ec_unique_p $0 star_p) left_p))", # test in half
+  "(lambda (in_half_p (ec_unique_p $0 triangle) up_p))", # test in half
+  "(lambda (in_half_p (ec_unique_p $0 triangle) right_p))", # test in half
+  "(lambda (in_half_p (ec_unique_p $0 triangle) down_p))", # test in half
+  "(lambda (in_half_p (ec_unique_p $0 triangle) left_p))", # test in half
+  "(lambda (is_edge_p (ec_unique_p $0 circle_p)))", # test is_edge
+  "(lambda (is_edge_p (ec_unique_p $0 star_p)))", # test is_edge
+  "(lambda (is_edge_p (ec_unique_p $0 rock_p)))", # test is_edge
+  "(lambda (is_edge_p (ec_unique_p $0 heart_p)))", # test is_edge
 ]
 
 
@@ -242,6 +248,23 @@ def test_ec_fixed_cases():
       f = partial(_test_ec_case)
       f.description = "test case: %s -> %s" % (expression, expected)
       yield f, scene, expression, expected, msg
+
+def test_ec_task_as_pyccg_scene():
+  instruction = 'go to the diamond'
+  scene = process_scene([SIMPLE_SCENE])
+  goal = (2,9)
+
+  puddleworldTypes, puddleworldPrimitives = convertOntology(ec_ontology)
+  ec_task = Task(name=instruction,
+                request=arrow(puddleworldTypes['model'], puddleworldTypes['action']),
+                examples=[([scene], tuple(goal))],
+                features=instruction)
+
+  converted_instruction, converted_model, converted_goal = ecTaskAsPyCCGUpdate(ec_task, ontology)
+
+  eq_(converted_instruction, instruction.split())
+  eq_(converted_model.scene, scene)
+  eq_(converted_goal, goal)
 
 
 def test_iter_expressions():

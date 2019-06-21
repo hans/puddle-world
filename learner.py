@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 #### Add EC dependency
 sys.path.append("../ec")
-from makePuddleworldTasks import loadPuddleWorldTasks
+from puddleworldTasks import loadPuddleWorldTasks
 
 from pyccg.chart import WeightedCCGChartParser, printCCGDerivation
 from pyccg.model import Model
@@ -106,6 +106,7 @@ for idx in sorted_idxs:
   if results:
     printCCGDerivation(results[0][0])
 
+  assert False
 
 print("Lexicon:")
 learner.lexicon.debug_print()
