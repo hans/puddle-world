@@ -33,167 +33,167 @@ SIMPLE_SCENE = np.array(
 CASES = [
   ("test basic object predicate",
    SIMPLE_SCENE,
-   r"unique(\x.diamond(x))",
+   r"find(model,\x.diamond(x))",
    frozendict(row=2, col=9, type="diamond")),
 
   ("test basic object predicate",
    SIMPLE_SCENE,
-   r"unique(diamond)",
+   r"find(model,diamond)",
    frozendict(row=2, col=9, type="diamond")),
 
   ("test pick",
    SIMPLE_SCENE,
-   r"move(unique(\x.diamond(x)))",
+   r"move(find(model,\x.diamond(x)))",
    (2, 9)),
 
   ("test relate down",
    SIMPLE_SCENE,
-   r"relate(unique(\x.diamond(x)),unique(\x.star(x)),down)",
+   r"relate(find(model,\x.diamond(x)),find(model,\x.star(x)),down)",
    True),
 
   ("test relate down",
    SIMPLE_SCENE,
-   r"relate(unique(\x.star(x)),unique(\x.diamond(x)),down)",
+   r"relate(find(model,\x.star(x)),find(model,\x.diamond(x)),down)",
    False),
 
   ("test relate up",
    SIMPLE_SCENE,
-   r"relate(unique(\x.diamond(x)),unique(\x.star(x)),up)",
+   r"relate(find(model,\x.diamond(x)),find(model,\x.star(x)),up)",
    False),
 
   ("test relate up",
    SIMPLE_SCENE,
-   r"relate(unique(\x.star(x)),unique(\x.diamond(x)),up)",
+   r"relate(find(model,\x.star(x)),find(model,\x.diamond(x)),up)",
    True),
 
   ("test relate left",
    SIMPLE_SCENE,
-   r"relate(unique(\x.rock(x)),unique(\x.star(x)),left)",
+   r"relate(find(model,\x.rock(x)),find(model,\x.star(x)),left)",
    True),
 
   ("test relate left",
    SIMPLE_SCENE,
-   r"relate(unique(\x.star(x)),unique(\x.rock(x)),left)",
+   r"relate(find(model,\x.star(x)),find(model,\x.rock(x)),left)",
    False),
 
   ("test relate right",
    SIMPLE_SCENE,
-   r"relate(unique(\x.rock(x)),unique(\x.star(x)),right)",
+   r"relate(find(model,\x.rock(x)),find(model,\x.star(x)),right)",
    False),
 
   ("test relate right",
    SIMPLE_SCENE,
-   r"relate(unique(\x.star(x)),unique(\x.rock(x)),right)",
+   r"relate(find(model,\x.star(x)),find(model,\x.rock(x)),right)",
    True),
 
   ("test relate_n 1",
    SIMPLE_SCENE,
-   r"relate_n(unique(\x.star(x)),unique(\x.rock(x)),right,1)",
+   r"relate_n(find(model,\x.star(x)),find(model,\x.rock(x)),right,1)",
    True),
 
   ("test relate_n 2",
    SIMPLE_SCENE,
-   r"relate_n(unique(\x.circle(x)),unique(\x.diamond(x)),up,2)",
+   r"relate_n(find(model,\x.circle(x)),find(model,\x.diamond(x)),up,2)",
    True),
 
   ("test in_half",
    SIMPLE_SCENE,
-   r"in_half(unique(\x.star(x)),up)",
+   r"in_half(find(model,\x.star(x)),up)",
    True),
 
   ("test in_half",
    SIMPLE_SCENE,
-   r"in_half(unique(\x.star(x)),right)",
+   r"in_half(find(model,\x.star(x)),right)",
    True),
 
   ("test in_half",
    SIMPLE_SCENE,
-   r"in_half(unique(\x.star(x)),down)",
+   r"in_half(find(model,\x.star(x)),down)",
    False),
 
   ("test in_half",
    SIMPLE_SCENE,
-   r"in_half(unique(\x.star(x)),left)",
+   r"in_half(find(model,\x.star(x)),left)",
    False),
 
   ("test in_half",
    SIMPLE_SCENE,
-   r"in_half(unique(\x.heart(x)),up)",
+   r"in_half(find(model,\x.heart(x)),up)",
    False),
 
   ("test in_half",
    SIMPLE_SCENE,
-   r"in_half(unique(\x.heart(x)),right)",
+   r"in_half(find(model,\x.heart(x)),right)",
    False),
 
   ("test in_half",
    SIMPLE_SCENE,
-   r"in_half(unique(\x.heart(x)),down)",
+   r"in_half(find(model,\x.heart(x)),down)",
    True),
 
   ("test in_half",
    SIMPLE_SCENE,
-   r"in_half(unique(\x.heart(x)),left)",
+   r"in_half(find(model,\x.heart(x)),left)",
    True),
 
   ("test is_edge",
    SIMPLE_SCENE,
-   r"is_edge(unique(\x.circle(x)))",
+   r"is_edge(find(model,\x.circle(x)))",
    True),
 
   ("test is_edge",
    SIMPLE_SCENE,
-   r"is_edge(unique(\x.star(x)))",
+   r"is_edge(find(model,\x.star(x)))",
    True),
 
   ("test is_edge",
    SIMPLE_SCENE,
-   r"is_edge(unique(\x.diamond(x)))",
+   r"is_edge(find(model,\x.diamond(x)))",
    True),
 
   ("test is_edge",
    SIMPLE_SCENE,
-   r"is_edge(unique(\x.heart(x)))",
+   r"is_edge(find(model,\x.heart(x)))",
    False),
 
   ("test complex query",
    SIMPLE_SCENE,
-   r"horse(unique(\x.relate(x,unique(\y.diamond(y)),down)))",
+   r"horse(find(model,\x.relate(x,find(model,\y.diamond(y)),down)))",
    True),
 
   ("test complex query",
    SIMPLE_SCENE,
-   r"horse(unique(\x.and_(horse(x),relate(x,unique(\y.diamond(y)),down))))",
+   r"horse(find(model,\x.and_(horse(x),relate(x,find(model,\y.diamond(y)),down))))",
    True),
 
 ]
 
 EC_EXPRESSIONS = [
-  "(lambda (ec_unique $0 spade))", # test basic object predicate
-  "(lambda (move (ec_unique $0 spade)))", # test pick
-  "(lambda (relate (ec_unique $0 spade) (ec_unique $0 puddle) down))", # test relate down
-  "(lambda (relate (ec_unique $0 puddle) (ec_unique $0 spade) down))", # test relate down
-  "(lambda (relate (ec_unique $0 spade) (ec_unique $0 puddle) up))", # test relate up
-  "(lambda (relate (ec_unique $0 puddle) (ec_unique $0 spade) up))", # test relate up
-  "(lambda (relate (ec_unique $0 rock) (ec_unique $0 star) left))", # test relate left
-  "(lambda (relate (ec_unique $0 rock) (ec_unique $0 puddle) left))", # test relate left
-  "(lambda (relate (ec_unique $0 rock) (ec_unique $0 star) right))", # test relate right
-  "(lambda (relate (ec_unique $0 star) (ec_unique $0 rock) right))", # test relate right
-  "(lambda (relate (ec_unique $0 puddle) (ec_unique $0 rock) right))", # test relate right
-  "(lambda (relate_n (ec_unique $0 star) (ec_unique $0 rock) right 1))", # test relate_n 1
-  "(lambda (relate_n (ec_unique $0 star) (ec_unique $0 spade) up 2))", # test relate_n 2,
-  "(lambda (in_half (ec_unique $0 star) up))", # test in half
-  "(lambda (in_half (ec_unique $0 star) right))", # test in half
-  "(lambda (in_half (ec_unique $0 star) down))", # test in half
-  "(lambda (in_half (ec_unique $0 star) left))", # test in half
-  "(lambda (in_half (ec_unique $0 triangle) up))", # test in half
-  "(lambda (in_half (ec_unique $0 triangle) right))", # test in half
-  "(lambda (in_half (ec_unique $0 triangle) down))", # test in half
-  "(lambda (in_half (ec_unique $0 triangle) left))", # test in half
-  "(lambda (is_edge (ec_unique $0 circle)))", # test is_edge
-  "(lambda (is_edge (ec_unique $0 star)))", # test is_edge
-  "(lambda (is_edge (ec_unique $0 rock)))", # test is_edge
-  "(lambda (is_edge (ec_unique $0 heart)))", # test is_edge
+  "(lambda (find $0 spade))", # test basic object predicate
+  "(lambda (move (find $0 spade)))", # test pick
+  "(lambda (relate (find $0 spade) (find $0 puddle) down))", # test relate down
+  "(lambda (relate (find $0 puddle) (find $0 spade) down))", # test relate down
+  "(lambda (relate (find $0 spade) (find $0 puddle) up))", # test relate up
+  "(lambda (relate (find $0 puddle) (find $0 spade) up))", # test relate up
+  "(lambda (relate (find $0 rock) (find $0 star) left))", # test relate left
+  "(lambda (relate (find $0 rock) (find $0 puddle) left))", # test relate left
+  "(lambda (relate (find $0 rock) (find $0 star) right))", # test relate right
+  "(lambda (relate (find $0 star) (find $0 rock) right))", # test relate right
+  "(lambda (relate (find $0 puddle) (find $0 rock) right))", # test relate right
+  "(lambda (relate_n (find $0 star) (find $0 rock) right 1))", # test relate_n 1
+  "(lambda (relate_n (find $0 star) (find $0 spade) up 2))", # test relate_n 2,
+  "(lambda (in_half (find $0 star) up))", # test in half
+  "(lambda (in_half (find $0 star) right))", # test in half
+  "(lambda (in_half (find $0 star) down))", # test in half
+  "(lambda (in_half (find $0 star) left))", # test in half
+  "(lambda (in_half (find $0 triangle) up))", # test in half
+  "(lambda (in_half (find $0 triangle) right))", # test in half
+  "(lambda (in_half (find $0 triangle) down))", # test in half
+  "(lambda (in_half (find $0 triangle) left))", # test in half
+  "(lambda (is_edge (find $0 circle)))", # test is_edge
+  "(lambda (is_edge (find $0 star)))", # test is_edge
+  "(lambda (is_edge (find $0 rock)))", # test is_edge
+  "(lambda (is_edge (find $0 heart)))", # test is_edge
 ]
 
 
@@ -250,4 +250,4 @@ def test_iter_expressions():
   """
   exprs = ontology.iter_expressions(type_request=ontology.types["object", "object", "action"], max_depth=6)
   exprs = set(str(x) for x in exprs)
-  ok_(r"\z2 z1.move(unique(\z3.relate(z3,z2,z1)))" in exprs)
+  ok_(r"\z2 z1.move(find(model,\z3.relate(z3,z2,z1)))" in exprs)

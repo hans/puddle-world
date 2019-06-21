@@ -44,7 +44,7 @@ def convertOntology(ontology, namespace='_p'):
     Conversion:
         Ontology Types -> EC baseTypes
         Ontology Constants -> EC Primitive (null-valued.)
-        Ontology Functions -> EC Primitives 
+        Ontology Functions -> EC Primitives
     :return:
         types: dict from ontology type names -> EC baseTypes.
         primitives: list of primtitives with names given by the ontology functions and constants.
@@ -52,7 +52,7 @@ def convertOntology(ontology, namespace='_p'):
     types = {t.name : ec_type.baseType("t_" + t.name + namespace) for t in ontology.types if t.name is not None}
 
     constants = [ec_program.Primitive(c.name + namespace, convertType(c.type, types), c.name) for c in ontology.constants]
-    
+
     # Check for EC versions of these functions.
     functions = []
     function_names = { f.name : f for f in ontology.functions }
@@ -61,7 +61,7 @@ def convertOntology(ontology, namespace='_p'):
             pass
         else:
             functions.extend([convertFunction(f, types, namespace)])
-    
+
     return types, constants + functions
 
 def getOCamlDefinitions(ont_types, ont_primitives, ontology_name=""):
@@ -86,8 +86,8 @@ def getOCamlDefinitions(ont_types, ont_primitives, ontology_name=""):
 if __name__ == "__main__":
     print("Demo: puddleworld ontology conversion.")
     import numpy as np
-    from puddleworldOntology import ec_ontology, process_scene, obj_dict
-    puddleworldTypes, puddleworldPrimitives = convertOntology(ec_ontology)
+    from puddleworldOntology import ontology, process_scene, obj_dict
+    puddleworldTypes, puddleworldPrimitives = convertOntology(ontology)
 
     if True:
         print("Converted %d types: " % len(puddleworldTypes))
@@ -110,7 +110,7 @@ if __name__ == "__main__":
         print("Relate n on tiny tasks.")
         obj = random.Random().choice(range(len(obj_dict) - 1))
         obj_name = obj_dict[obj]
-        instructions = obj_name 
+        instructions = obj_name
         objects = np.zeros((size, size))
         row, col = random.Random().choice(range(size)), random.Random().choice(range(size))
         objects[row][col] = obj
@@ -140,7 +140,7 @@ if __name__ == "__main__":
      [0.0, 0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0, 0.0, 3.0],
      [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 10.0, 0.0],
      [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
-        
+
         scene = process_scene([SIMPLE_SCENE])
 
         p = ec_program.Program.parse('(lambda (move_debug $0))')
@@ -210,7 +210,7 @@ if __name__ == "__main__":
         print(p)
         print(p.runWithArguments([True, obj2]))
         print("\n")
-        
+
         # Test basic object predicate.
         p = ec_program.Program.parse("(lambda (ec_unique $0 spade))")
         print(p)
@@ -252,7 +252,7 @@ if __name__ == "__main__":
         print(p)
         print("Eval: %s" % str(p.runWithArguments([scene])))
         print("\n")
-        
+
 
 
 

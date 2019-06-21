@@ -41,24 +41,24 @@ initial_lex = Lexicon.fromstring(r"""
   :- S:N
 
   reach => S/N {\x.move(x)}
-  reach => S/N {\x.move(unique(x))}
-  below => S/N {\x.move(unique(\y.relate(y,x,down)))}
-  above => S/N {\x.move(unique(\y.relate(y,x,up)))}
+  reach => S/N {\x.move(find(model,x))}
+  below => S/N {\x.move(find(model,\y.relate(y,x,down)))}
+  above => S/N {\x.move(find(model,\y.relate(y,x,up)))}
 
   , => S\S/S {\a b.a}
   , => S\S/S {\a b.b}
 
   of => N\N/N {\x d y.relate(x,y,d)}
-  of => N\N/N {\x d y.relate(unique(x),d,y)}
+  of => N\N/N {\x d y.relate(find(model,x),d,y)}
   to => N\N/N {\x y.x}
 
-  one => S/N/N {\d x.move(unique(\y.relate(y,x,d)))}
-  one => S/N/N {\d x.move(unique(\y.relate_n(y,x,d,1)))}
+  one => S/N/N {\d x.move(find(model,\y.relate(y,x,d)))}
+  one => S/N/N {\d x.move(find(model,\y.relate_n(y,x,d,1)))}
   right => N/N {\f x.and_(apply(f, x),in_half(x,right))}
 
   most => N\N/N {\x d.max_in_dir(x, d)}
 
-  the => N/N {\x.unique(x)}
+  the => N/N {\x.find(model,x)}
 
   left => N {left}
   below => N {down}
@@ -66,12 +66,12 @@ initial_lex = Lexicon.fromstring(r"""
   right => N {right}
   horse => N {\x.horse(x)}
   rock => N {\x.rock(x)}
-  rock => N {unique(\x.rock(x))}
+  rock => N {find(model,\x.rock(x))}
   cell => N {\x.true}
   spade => N {\x.spade(x)}
-  spade => N {unique(\x.spade(x))}
+  spade => N {find(model,\x.spade(x))}
   heart => N {\x.heart(x)}
-  heart => N {unique(\x.heart(x))}
+  heart => N {find(model,\x.heart(x))}
   circle => N {\x.circle(x)}
   # triangle => N {\x.triangle(x)}
 """, ontology, include_semantics=True)

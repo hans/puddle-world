@@ -44,7 +44,12 @@ def ec_fn_exists(model, expr):
   cf = ec_fn_tmodel_evaluate(model, expr)
   return fn_exists(cf)
 
-def fn_unique(xs):
+def fn_find(model, xs):
+  """
+  For each element in the domain, `xs` specifies whether the `find` predicate
+  is true of that element or not. All we have left to do is find the unique
+  element which is true.
+  """
   true_xs = [x for x, matches in xs.items() if matches]
   assert len(true_xs) == 1
   return true_xs[0]
@@ -55,7 +60,7 @@ def fn_exists(xs):
 
 
 def fn_pick(target):
-  if isinstance(target, frozendict): 
+  if isinstance(target, frozendict):
     return (target["row"], target["col"])
 
 
@@ -102,14 +107,13 @@ def fn_is_edge(obj):
   return obj["col"] in [0, SCENE_WIDTH - 1] or obj["row"] in [0, SCENE_HEIGHT - 1]
 
 
-type_names = ["object", "boolean", "action", "direction", "int"]
-type_names.extend(['model']) # For EC enumeration on grounded scenes
+type_names = ["model", "object", "boolean", "action", "direction", "int"]
 types = TypeSystem(type_names)
 functions = [
   types.new_function("move", ("object", "action"), fn_pick),
   types.new_function("relate", ("object", "object", "direction", "boolean"), fn_relate),
   types.new_function("relate_n", ("object", "object", "direction", "int", "boolean"), fn_relate_n),
-  types.new_function("unique", (("object", "boolean"), "object"), fn_unique),
+  types.new_function("find", ("model", ("object", "boolean"), "object"), fn_find),
   types.new_function("in_half", ("object", "direction", "boolean"), fn_in_half),
   types.new_function("apply", (("object", "boolean"), "object", "boolean"), lambda f, o: f(o)),
   types.new_function("and_", ("boolean", "boolean", "boolean"), lambda a, b: a and b),
@@ -122,6 +126,7 @@ functions.extend([types.new_function(obj, ("object", "boolean"), make_obj_fn(obj
                   for obj in obj_dict.values()])
 
 constants = [
+  types.new_constant("model", "model"),
   types.new_constant("true", "boolean"),
   types.new_constant("left", "direction"),
   types.new_constant("right", "direction"),
@@ -132,13 +137,6 @@ constants = [
 ]
 
 ontology = Ontology(types, functions, constants)
-
-# Add model-typed versions of function for EC.
-ec_functions = functions
-ec_functions.extend([
-  types.new_function("ec_unique", ("model", ("object", "boolean"), "object"), ec_fn_unique)
-  ])
-ec_ontology = Ontology(types, ec_functions, constants)
 
 
 def process_scene(scene_objects):

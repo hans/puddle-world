@@ -23,7 +23,7 @@ from utilities import eprint, numberOfCPUs
 from recognition import *
 from task import *
 
-from puddleworldOntology import ec_ontology, process_scene
+from puddleworldOntology import ontology, process_scene
 from utils import convertOntology
 
 #### Load and prepare dataset for EC.
@@ -45,7 +45,7 @@ def makePuddleworldTask(raw_task, input_type, output_type):
                 features=instructions)
     return task
 
- 
+
 def makeTasks(train_key, test_key, input_type, output_type):
     data = loadPuddleWorldTasks()
     raw_train, raw_test = data[train_key], data[test_key]
@@ -55,7 +55,7 @@ def makeTasks(train_key, test_key, input_type, output_type):
         lengths = np.array([len(instr.split(" ")) for _, _, instr, _ in dataset])
         sorted_idxs = lengths.argsort()
         return [dataset[idx] for idx in sorted_idxs]
- 
+
     sorted_train, sorted_test = sort_by_instruction(raw_train), sort_by_instruction(raw_test)
     train, test = [makePuddleworldTask(task, input_type, output_type) for task in sorted_train], [makePuddleworldTask(task, input_type, output_type) for task in sorted_test]
     return train, test
@@ -74,7 +74,7 @@ def makeTinyTasks(input_type, output_type, num_tiny=1, tiny_scene_size=2):
     def makeTinyTask(size):
         obj = random.Random().choice(range(len(obj_dict) - 1))
         obj_name = obj_dict[obj]
-        instructions = obj_name 
+        instructions = obj_name
         objects = np.zeros((size, size))
         row, col = random.Random().choice(range(size)), random.Random().choice(range(size))
         objects[row][col] = obj
@@ -157,8 +157,8 @@ def puddleworld_options(parser):
         type=int,
         help='Size of tiny scenes; will be NxN scenes.'
         )
-    parser.add_argument("--random-seed", 
-        type=int, 
+    parser.add_argument("--random-seed",
+        type=int,
         default=0
         )
     parser.add_argument("--checkpoint-analysis",
@@ -168,9 +168,9 @@ def puddleworld_options(parser):
 if __name__ == "__main__":
     # EC command line arguments.
     args = commandlineArguments(
-        enumerationTimeout=10, 
-        activation='tanh', 
-        iterations=1, 
+        enumerationTimeout=10,
+        activation='tanh',
+        iterations=1,
         recognitionTimeout=3600,
         a=3, maximumFrontier=10, topK=2, pseudoCounts=30.0,
         helmholtzRatio=0.5, structurePenalty=1.,
@@ -189,7 +189,7 @@ if __name__ == "__main__":
         os.system("mkdir -p %s"%outputDirectory)
 
         # Convert ontology.
-        puddleworldTypes, puddleworldPrimitives = convertOntology(ec_ontology)
+        puddleworldTypes, puddleworldPrimitives = convertOntology(ontology)
         input_type, output_type = puddleworldTypes['model'], puddleworldTypes['action']
 
         # Make tasks.
@@ -208,13 +208,13 @@ if __name__ == "__main__":
         # Make grammar.
         baseGrammar = Grammar.uniform(puddleworldPrimitives)
         print(baseGrammar.json())
-        
+
         # Run EC.
-        explorationCompression(baseGrammar, allTrain, 
-                                testingTasks=allTest, 
+        explorationCompression(baseGrammar, allTrain,
+                                testingTasks=allTest,
                                 outputPrefix=outputDirectory, **args)
 
-    
+
 
 
 
@@ -238,17 +238,17 @@ if __name__ == "__main__":
             print("Clustering %d embeddings of shape: %s" % (len(embeddings), str(embeddings[0].shape)))
             labels, embeddings = np.array(labels), np.array(embeddings)
             clustered = tsne.fit_transform(embeddings)
-            plotEmbeddingWithLabels(clustered, 
-                                        labels, 
-                                        title, 
-                                        os.path.join("%s_tsne_labels.png" % title.replace(" ", ""))) # TODO(catwong): change output to take commandline. 
+            plotEmbeddingWithLabels(clustered,
+                                        labels,
+                                        title,
+                                        os.path.join("%s_tsne_labels.png" % title.replace(" ", ""))) # TODO(catwong): change output to take commandline.
 
         # Get the recurrent feature extractor symbol embeddings.
         plotSymbolEmbeddings = False
         if plotSymbolEmbeddings:
             symbolEmbeddings = result.recognitionModel.featureExtractor.symbolEmbeddings()
             plotTSNE("Symbol embeddings", symbolEmbeddings)
-        
+
         # Plot the word-specific log productions.
         plotWordHiddenState = True
         if plotWordHiddenState:
@@ -278,7 +278,7 @@ if __name__ == "__main__":
                     print("No embeddings for key found, ", embedding_key)
                     assert False
                 return task_embeddings
-            
+
             embedding_key = 'taskLogProductions'
             task_embeddings = get_task_embeddings(result, embedding_key)
             plotTSNE(embedding_key, task_embeddings)
