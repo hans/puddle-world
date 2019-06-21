@@ -24,9 +24,11 @@ from utilities import eprint, numberOfCPUs
 from recognition import *
 from task import *
 
+from pyccg.lexicon import Lexicon
+from pyccg.word_learner import WordLearner
+
 from puddleworldOntology import ec_ontology, process_scene
-from learner import initial_lex
-from utils import convertOntology
+from utils import convertOntology, ecTaskAsPyCCGUpdate
 
 #### Utility functions to load and prepare dataset for EC.
 def loadPuddleWorldTasks(datafile='data/puddleworld.json'):
@@ -127,6 +129,46 @@ class InstructionsFeatureExtractor(RecurrentFeatureExtractor):
                                                             bidirectional=True,
                                                             cuda=cuda)
 
+### PyCCG Word Learner
+initial_puddleworld_lex = Lexicon.fromstring(r"""
+  :- S:N
+
+  reach => S/N {\x.move(x)}
+  reach => S/N {\x.move(unique(x))}
+  below => S/N {\x.move(unique(\y.relate(y,x,down)))}
+  above => S/N {\x.move(unique(\y.relate(y,x,up)))}
+
+  , => S\S/S {\a b.a}
+  , => S\S/S {\a b.b}
+
+  of => N\N/N {\x d y.relate(x,y,d)}
+  of => N\N/N {\x d y.relate(unique(x),d,y)}
+  to => N\N/N {\x y.x}
+
+  one => S/N/N {\d x.move(unique(\y.relate(y,x,d)))}
+  one => S/N/N {\d x.move(unique(\y.relate_n(y,x,d,1)))}
+  right => N/N {\f x.and_(apply(f, x),in_half(x,right))}
+
+  most => N\N/N {\x d.max_in_dir(x, d)}
+
+  the => N/N {\x.unique(x)}
+
+  left => N {left}
+  below => N {down}
+  above => N {up}
+  right => N {right}
+  horse => N {\x.horse(x)}
+  rock => N {\x.rock(x)}
+  rock => N {unique(\x.rock(x))}
+  cell => N {\x.true}
+  spade => N {\x.spade(x)}
+  spade => N {unique(\x.spade(x))}
+  heart => N {\x.heart(x)}
+  heart => N {unique(\x.heart(x))}
+  circle => N {\x.circle(x)}
+  # triangle => N {\x.triangle(x)}
+""", ec_ontology, include_semantics=True)
+
 class ECLanguageLearner:
     """
     ECLanguageLearner: driver class that manages learning between PyCCG and EC.
@@ -135,14 +177,22 @@ class ECLanguageLearner:
                 pyccg_learner):
                 self.pyccg_learner = pyccg_learner
 
-    
+    def _update_pyccg_timeout(self, update, timeout):
+        import time
+        import multiprocessing
+        
+
+
+
     def _update_pyccg_with_distant_batch(self, tasks, timeout):
         """
+        Sequential update of PyCCG with distant batch. Returns discovered parses.
         Ret:
             pyccg_meanings: dict from task -> PyCCG meanings for the sentence, 
                             or None if no expression was found.
         """
-        return None
+        pyccg_meanings = {t: _update_pyccg_timeout(ecTaskAsPyCCGUpdate(task), timeout) for t in tasks}
+        return pyccg_meanings
 
     def _pyccg_meanings_to_ec_frontiers(self, pyccg_meanings):
         """
@@ -275,7 +325,16 @@ if __name__ == "__main__":
         # Initialize the language learner driver.
         ##### DEBUGGING (cathy)
         # (note: cathy - to debug, jankily run with made up arguments, but we don't actually wanna do that,)
+        pyccg_learner = WordLearner(initial_puddleworld_lex)
+        learner = ECLanguageLearner(pyccg_learner)
 
+        tasks, maximumFrontier, enumerationTimeout, CPUs, solver, evaluationTimeout = localTrain[5], 2, 5, 1, 'python', 5
+        learner.wake_generative_with_pyccg(baseGrammar, tasks, 
+                    maximumFrontier,
+                    enumerationTimeout,
+                    CPUs,
+                    solver,
+                    evaluationTimeout)
 
         assert False
         ##### DEBUGGING (cathy)
