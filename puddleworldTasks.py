@@ -25,7 +25,7 @@ def makePuddleworldTask(raw_task, input_type, output_type):
                 features=instructions)
     return task
 
- 
+
 def makeTasks(train_key, test_key, input_type, output_type):
     data = loadPuddleWorldTasks()
     raw_train, raw_test = data[train_key], data[test_key]
@@ -35,17 +35,17 @@ def makeTasks(train_key, test_key, input_type, output_type):
         lengths = np.array([len(instr.split(" ")) for _, _, instr, _ in dataset])
         sorted_idxs = lengths.argsort()
         return [dataset[idx] for idx in sorted_idxs]
- 
+
     sorted_train, sorted_test = sort_by_instruction(raw_train), sort_by_instruction(raw_test)
     train, test = [makePuddleworldTask(task, input_type, output_type) for task in sorted_train], [makePuddleworldTask(task, input_type, output_type) for task in sorted_test]
     return train, test
 
 def makeLocalTasks(input_type, output_type):
-	"""Make tasks with 'local' spatial relations."""
+    """Make tasks with 'local' spatial relations."""
     return makeTasks('local_train', 'local_test', input_type, output_type)
 
 def makeGlobalTasks(input_type, output_type):
-	"""Make tasks with 'global' spatial relations."""
+    """Make tasks with 'global' spatial relations."""
     return makeTasks('global_train', 'global_test', input_type, output_type)
 
 def makeTinyTasks(input_type, output_type, num_tiny=1, tiny_scene_size=2):
@@ -56,7 +56,7 @@ def makeTinyTasks(input_type, output_type, num_tiny=1, tiny_scene_size=2):
     def makeTinyTask(size):
         obj = random.Random().choice(range(len(obj_dict) - 1))
         obj_name = obj_dict[obj]
-        instructions = obj_name 
+        instructions = obj_name
         objects = np.zeros((size, size))
         row, col = random.Random().choice(range(size)), random.Random().choice(range(size))
         objects[row][col] = obj
