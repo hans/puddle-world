@@ -100,6 +100,14 @@ def ecTaskAsPyCCGUpdate(task, ontology):
     scene, goal = scene[0], goal
     return tokenized, Model(scene, ontology), goal
 
+def puddleworld_ec_translation_fn(ec_expr, namespace='_p'):
+    """
+    Convenience translation function to remove Puddleworld namespacing before conversion
+    to S-expr.
+    """
+    return ec_expr.replace(namespace+" ", " ")
+
+
 
 if __name__ == "__main__":
     print("Demo: puddleworld ontology conversion.")

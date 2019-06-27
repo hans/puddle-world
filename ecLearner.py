@@ -27,10 +27,11 @@ from task import *
 
 from pyccg.lexicon import Lexicon
 from pyccg.word_learner import WordLearner
+from pyccg.logic import read_ec_sexpr
 
 from puddleworldOntology import ec_ontology, process_scene
 from puddleworldTasks import *
-from utils import convertOntology, ecTaskAsPyCCGUpdate
+from utils import convertOntology, ecTaskAsPyCCGUpdate, puddleworld_ec_translation_fn
 
 
 class InstructionsFeatureExtractor(RecurrentFeatureExtractor):
@@ -115,10 +116,16 @@ initial_puddleworld_lex = Lexicon.fromstring(r"""
 class ECLanguageLearner:
     """
     ECLanguageLearner: driver class that manages learning between PyCCG and EC.
+
+    ec_ontology_translation_fn: runs on the EC program string if there are any function naming conversions.
     """
     def __init__(self,
-                pyccg_learner):
+                pyccg_learner,
+                ec_ontology_translation_fn=None):
+
                 self.pyccg_learner = pyccg_learner
+                self.ec_ontology_translation_fn = ec_ontology_translation_fn
+
 
     def _update_pyccg_timeout(self, update, timeout):
         """
@@ -156,6 +163,19 @@ class ECLanguageLearner:
         """
         pyccg_meanings = {t: self._update_pyccg_timeout(ecTaskAsPyCCGUpdate(t, self.pyccg_learner.ontology), timeout) for t in tasks}
         return pyccg_meanings
+
+    def _update_pyccg_with_supervised_batch(self, frontiers):
+        """
+        Sequential update of PyCCG supervised on EC frontiers.
+        """
+        for frontier in frontiers:
+            instruction, model, goal = ecTaskAsPyCCGUpdate(frontier.task, self.pyccg_learner.ontology)
+            for entry in frontier.entries:
+                if self.ec_ontology_translation_fn:
+                    ec_expr = str(entry.program) if self.ec_ontology_translation_fn is None else  self.ec_ontology_translation_fn(str(entry.program))
+                converted = read_ec_sexpr(ec_expr)
+                # TODO (catwong, jgauthier): no update with supervised.
+                print("****ALERT: NOT YET IMPLEMENTED FULLY: NO UDPATE WITH SUPERVISED *****")
 
     def _pyccg_meanings_to_ec_frontiers(self, pyccg_meanings):
         """
@@ -202,9 +222,7 @@ class ECLanguageLearner:
         print(Frontier.describe(fallback_frontiers))
 
         # Update PyCCG model with fallback discovered frontiers.
-        
-                # TODO(catwong): Just create the SExpressions here since they aren't 'meanings'.
-                # TODO: just update_with_supervised one at a time in a loop.
+        self._update_pyccg_with_supervised_batch(fallback_frontiers) # TODO(catwong, jgauthier): does not yet update.
 
         # Convert and consolidate PyCCG meanings and fallback frontiers for handoff to EC.
         pyccg_frontiers = self._pyccg_meanings_to_ec_frontiers(pyccg_meanings)
@@ -304,7 +322,7 @@ if __name__ == "__main__":
         ##### DEBUGGING (cathy)
         # (note: cathy - to debug, jankily run with made up arguments, but we don't actually wanna do that,)
         pyccg_learner = WordLearner(initial_puddleworld_lex)
-        learner = ECLanguageLearner(pyccg_learner)
+        learner = ECLanguageLearner(pyccg_learner, ec_ontology_translation_fn=puddleworld_ec_translation_fn)
 
         tasks, maximumFrontier, enumerationTimeout, CPUs, solver, evaluationTimeout = localTrain[:10], 2, 2, 5, 'python', 5
         learner.wake_generative_with_pyccg(baseGrammar, tasks, 
