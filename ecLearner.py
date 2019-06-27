@@ -17,10 +17,11 @@ import random
 import string
 
 from ec import explorationCompression, commandlineArguments, Task, ecIterator
-from frontier import Frontier
+from frontier import Frontier, FrontierEntry
 from enumeration import * # EC enumeration.
 from taskRankGraphs import plotEmbeddingWithLabels
 from grammar import Grammar
+from program import Program
 from utilities import eprint, numberOfCPUs
 from recognition import *
 from task import *
@@ -29,9 +30,9 @@ from pyccg.lexicon import Lexicon
 from pyccg.word_learner import WordLearner
 from pyccg.logic import read_ec_sexpr
 
-from puddleworldOntology import ec_ontology, process_scene
+from puddleworldOntology import ec_ontology, process_scene, puddleworld_ec_translation_fn
 from puddleworldTasks import *
-from utils import convertOntology, ecTaskAsPyCCGUpdate, puddleworld_ec_translation_fn
+from utils import convertOntology, ecTaskAsPyCCGUpdate
 
 
 class InstructionsFeatureExtractor(RecurrentFeatureExtractor):
@@ -130,7 +131,7 @@ class ECLanguageLearner:
     def _update_pyccg_timeout(self, update, timeout):
         """
         Wraps PyCCG update with distant in a timeout.
-        Returns: S-expression semantics for the sentence or None if none found within the timeout.
+        Returns: list of (S-expression semantics, logProb) tuples found for the sentence within the timeout.
         """
         import signal
         def timeout_handler(signum, frame):
@@ -145,13 +146,14 @@ class ECLanguageLearner:
         except Exception:
             pass
 
+        weighted_meanings = []
         if results and len(results) > 0:
-            root_token, _ = results[0][0].label()
-            meaning = root_token.semantics()
-        else:
-            meaning = None
-
-        return meaning
+            for result in results:
+                log_probability = result[1]
+                root_token, _ = result[0].label()
+                meaning = root_token.semantics()
+                weighted_meanings.append((meaning, log_probability))
+        return weighted_meanings
 
 
     def _update_pyccg_with_distant_batch(self, tasks, timeout):
@@ -172,22 +174,41 @@ class ECLanguageLearner:
             instruction, model, goal = ecTaskAsPyCCGUpdate(frontier.task, self.pyccg_learner.ontology)
             for entry in frontier.entries:
                 if self.ec_ontology_translation_fn:
-                    ec_expr = str(entry.program) if self.ec_ontology_translation_fn is None else  self.ec_ontology_translation_fn(str(entry.program))
+                    ec_expr = str(entry.program) if self.ec_ontology_translation_fn is None else self.ec_ontology_translation_fn(str(entry.program), is_pyccg_to_ec=False)
                 converted = read_ec_sexpr(ec_expr)
                 # TODO (catwong, jgauthier): no update with supervised.
-                print("****ALERT: NOT YET IMPLEMENTED FULLY: NO UDPATE WITH SUPERVISED *****")
+                print("****ALERT: NOT YET IMPLEMENTED FULLY: NO PYCCG UDPATE WITH SUPERVISED *****")
 
     def _pyccg_meanings_to_ec_frontiers(self, pyccg_meanings):
         """
         Ret:
             pyccg_frontiers: dict from task -> Dreamcoder frontiers.
         """
-        return None
+        pyccg_frontiers = {}
+        for task in pyccg_meanings:
+            if len(pyccg_meanings[task]) > 0:
+                frontier_entries = []
+                for (meaning, log_prob) in pyccg_meanings[task]:
+                    ec_sexpr = self.pyccg_learner.ontology.as_ec_sexpr(meaning)
+                    if self.ec_ontology_translation_fn:
+                        ec_sexpr = self.ec_ontology_translation_fn(ec_sexpr, is_pyccg_to_ec=True)
+
+                    # Uses the p=1.0 likelihood for programs that solve the task.
+                    # TODO(cathywong): this cannot work if we haven't already registered the primitives
+                    frontier_entry = FrontierEntry(
+                        program=Program.parse(ec_sexpr),
+                        logPrior=log_prob, 
+                        logLikelihood=0.0)
+                    frontier_entries.append(frontier_entry)
+
+                pyccg_frontiers[task] = Frontier(frontier_entries, task)
+        return pyccg_frontiers
 
     def _describe_pyccg_results(self, pyccg_results):
         for task in pyccg_results:
-            if pyccg_results[task]:
-                print('HIT %s w/ %s' %(task.name, str(pyccg_results[task])))
+            if len(pyccg_results[task]) > 0:
+                best_program, best_prob = pyccg_results[task][0]
+                print('HIT %s w/ %s, logProb = %s' %(task.name, str(best_program), str(best_prob)))
             else:
                 print('MISS %s' % task.name)
 
@@ -206,16 +227,19 @@ class ECLanguageLearner:
         Converts the meanings into EC-style frontiers to be handed off to EC.
         """
         # Enumerate PyCCG meanings and update the word learner.
+
+
         pyccg_meanings = self._update_pyccg_with_distant_batch(tasks, enumerationTimeout)
        
         # Enumerate the remaining tasks using EC-style blind enumeration.
-        unsolved_tasks = [task for task in tasks if pyccg_meanings[task] is None]
+        unsolved_tasks = [task for task in tasks if len(pyccg_meanings[task]) == 0]
         fallback_frontiers, fallback_times = multicoreEnumeration(grammar, unsolved_tasks, 
                                                    maximumFrontier=maximumFrontier,
                                                    enumerationTimeout=enumerationTimeout,
                                                    CPUs=CPUs,
                                                    solver=solver,
                                                    evaluationTimeout=evaluationTimeout)
+
         print("PyCCG model parsing results")
         self._describe_pyccg_results(pyccg_meanings)
         print("Non-language generative model enumeration results:")
@@ -226,10 +250,11 @@ class ECLanguageLearner:
 
         # Convert and consolidate PyCCG meanings and fallback frontiers for handoff to EC.
         pyccg_frontiers = self._pyccg_meanings_to_ec_frontiers(pyccg_meanings)
-        all_frontiers = {t : pyccg_frontiers[t] if t in pyccg_frontiers else fallback_frontiers[t]}
-        all_times = {t : enumerationTimeout if t in pyccg_frontiers else fallback_times[t]}
+        fallback_frontiers = {frontier.task : frontier for frontier in fallback_frontiers}
+        all_frontiers = {t : pyccg_frontiers[t] if t in pyccg_frontiers else fallback_frontiers[t] for t in tasks}
+        all_times = {t : enumerationTimeout if t in pyccg_frontiers else fallback_times[t] for t in tasks}
 
-        return all_frontiers, all_times
+        return list(all_frontiers.values()), all_times
             
 
 ### Additional command line arguments for Puddleworld.

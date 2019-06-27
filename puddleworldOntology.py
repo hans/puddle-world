@@ -152,6 +152,22 @@ def process_scene(scene_objects):
   return {"objects": list(scene_objects.values())}
 
 
+def puddleworld_ec_translation_fn(raw_expr, is_pyccg_to_ec, namespace='_p'):
+    """
+    Convenience translation function to remove Puddleworld namespacing before conversion
+    to S-expr, or add it back.
+    """
+    if is_pyccg_to_ec:
+        # Namespace all of the functions and constants
+        namespaced_strings = [function for function in ontology.functions_dict]
+        namespaced_strings += [str(constant) for constant in ontology.constants_dict]
+        for renameable in namespaced_strings:
+          raw_expr = raw_expr.replace(renameable, renameable+namespace)
+        return raw_expr
+    else:
+        return raw_expr.replace(namespace+" ", " ")
+
+
 ####
 # A tiny DSL for debugging purposes.
 def fn_pick_debug(model):
