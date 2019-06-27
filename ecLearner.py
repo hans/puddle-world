@@ -17,6 +17,7 @@ import random
 import string
 
 from ec import explorationCompression, commandlineArguments, Task, ecIterator
+from frontier import Frontier
 from enumeration import * # EC enumeration.
 from taskRankGraphs import plotEmbeddingWithLabels
 from grammar import Grammar
@@ -120,20 +121,40 @@ class ECLanguageLearner:
                 self.pyccg_learner = pyccg_learner
 
     def _update_pyccg_timeout(self, update, timeout):
-        import time
-        import multiprocessing
-        
+        """
+        Wraps PyCCG update with distant in a timeout.
+        Returns: S-expression semantics for the sentence or None if none found within the timeout.
+        """
+        import signal
+        def timeout_handler(signum, frame):
+            raise Exception("PyCCG enumeration timeout.")
 
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(timeout) # Start the stopwatch.
+        results = None
+        try:
+            instruction, model, goal = update
+            results = self.pyccg_learner.update_with_distant(instruction, model, goal)
+        except Exception:
+            pass
+
+        if results and len(results) > 0:
+            root_token, _ = results[0][0].label()
+            meaning = root_token.semantics()
+        else:
+            meaning = None
+
+        return meaning
 
 
     def _update_pyccg_with_distant_batch(self, tasks, timeout):
         """
         Sequential update of PyCCG with distant batch. Returns discovered parses.
         Ret:
-            pyccg_meanings: dict from task -> PyCCG meanings for the sentence, 
+            pyccg_meanings: dict from task -> PyCCG S-expression semantics for the sentence, 
                             or None if no expression was found.
         """
-        pyccg_meanings = {t: _update_pyccg_timeout(ecTaskAsPyCCGUpdate(task), timeout) for t in tasks}
+        pyccg_meanings = {t: self._update_pyccg_timeout(ecTaskAsPyCCGUpdate(t, self.pyccg_learner.ontology), timeout) for t in tasks}
         return pyccg_meanings
 
     def _pyccg_meanings_to_ec_frontiers(self, pyccg_meanings):
@@ -142,6 +163,13 @@ class ECLanguageLearner:
             pyccg_frontiers: dict from task -> Dreamcoder frontiers.
         """
         return None
+
+    def _describe_pyccg_results(self, pyccg_results):
+        for task in pyccg_results:
+            if pyccg_results[task]:
+                print('HIT %s w/ %s' %(task.name, str(pyccg_results[task])))
+            else:
+                print('MISS %s' % task.name)
 
     def wake_generative_with_pyccg(self,
                     grammar, tasks, 
@@ -159,16 +187,22 @@ class ECLanguageLearner:
         """
         # Enumerate PyCCG meanings and update the word learner.
         pyccg_meanings = self._update_pyccg_with_distant_batch(tasks, enumerationTimeout)
-
+       
         # Enumerate the remaining tasks using EC-style blind enumeration.
         unsolved_tasks = [task for task in tasks if pyccg_meanings[task] is None]
-        fallback_frontiers, fallback_times = multicoreEnumeration(grammar, tasks, 
+        fallback_frontiers, fallback_times = multicoreEnumeration(grammar, unsolved_tasks, 
                                                    maximumFrontier=maximumFrontier,
                                                    enumerationTimeout=enumerationTimeout,
                                                    CPUs=CPUs,
                                                    solver=solver,
                                                    evaluationTimeout=evaluationTimeout)
+        print("PyCCG model parsing results")
+        self._describe_pyccg_results(pyccg_meanings)
+        print("Non-language generative model enumeration results:")
+        print(Frontier.describe(fallback_frontiers))
+
         # Update PyCCG model with fallback discovered frontiers.
+        
                 # TODO(catwong): Just create the SExpressions here since they aren't 'meanings'.
                 # TODO: just update_with_supervised one at a time in a loop.
 
@@ -264,13 +298,15 @@ if __name__ == "__main__":
         baseGrammar = Grammar.uniform(puddleworldPrimitives)
         print(baseGrammar.json())
 
+
+
         # Initialize the language learner driver.
         ##### DEBUGGING (cathy)
         # (note: cathy - to debug, jankily run with made up arguments, but we don't actually wanna do that,)
         pyccg_learner = WordLearner(initial_puddleworld_lex)
         learner = ECLanguageLearner(pyccg_learner)
 
-        tasks, maximumFrontier, enumerationTimeout, CPUs, solver, evaluationTimeout = localTrain[5], 2, 5, 1, 'python', 5
+        tasks, maximumFrontier, enumerationTimeout, CPUs, solver, evaluationTimeout = localTrain[:10], 2, 2, 5, 'python', 5
         learner.wake_generative_with_pyccg(baseGrammar, tasks, 
                     maximumFrontier,
                     enumerationTimeout,
@@ -281,6 +317,8 @@ if __name__ == "__main__":
         assert False
         ##### DEBUGGING (cathy)
         ##### DEBUGGING UNCOMMENT BELOW WHEN DONE (cathy)
+
+
         # Run Dreamcoder exploration/compression.
         # explorationCompression(baseGrammar, allTrain, 
         #                         testingTasks=allTest, 
