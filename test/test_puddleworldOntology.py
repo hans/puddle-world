@@ -175,30 +175,30 @@ CASES = [
 ]
 
 EC_EXPRESSIONS = [
-  "(lambda (ec_unique_p $0 spade_p))", # test basic object predicate
-  "(lambda (move_p (ec_unique_p $0 spade_p)))", # test pick
-  "(lambda (relate_p (ec_unique_p $0 spade_p) (ec_unique_p $0 puddle_p) down_p))", # test relate down
-  "(lambda (relate_p (ec_unique_p $0 puddle_p) (ec_unique_p $0 spade_p) down_p))", # test relate down
-  "(lambda (relate_p (ec_unique_p $0 spade_p) (ec_unique_p $0 puddle_p) up_p))", # test relate up
-  "(lambda (relate_p (ec_unique_p $0 puddle_p) (ec_unique_p $0 spade_p) up_p))", # test relate up
+  "(lambda (ec_unique_p $0 diamond_p))", # test basic object predicate
+  "(lambda (ec_unique_p $0 diamond_p))", # test basic object predicate
+  "(lambda (move_p (ec_unique_p $0 diamond_p)))", # test pick
+  "(lambda (relate_p (ec_unique_p $0 diamond_p) (ec_unique_p $0 star_p) down_p))", # test relate down
+  "(lambda (relate_p (ec_unique_p $0 star_p) (ec_unique_p $0 diamond_p) down_p))", # test relate down
+  "(lambda (relate_p (ec_unique_p $0 diamond_p) (ec_unique_p $0 star_p) up_p))", # test relate up
+  "(lambda (relate_p (ec_unique_p $0 star_p) (ec_unique_p $0 diamond_p) up_p))", # test relate up
   "(lambda (relate_p (ec_unique_p $0 rock_p) (ec_unique_p $0 star_p) left_p))", # test relate left
-  "(lambda (relate_p (ec_unique_p $0 rock_p) (ec_unique_p $0 puddle_p) left_p))", # test relate left
+  "(lambda (relate_p (ec_unique_p $0 star_p) (ec_unique_p $0 rock_p) left_p))", # test relate left
   "(lambda (relate_p (ec_unique_p $0 rock_p) (ec_unique_p $0 star_p) right_p))", # test relate right
   "(lambda (relate_p (ec_unique_p $0 star_p) (ec_unique_p $0 rock_p) right_p))", # test relate right
-  "(lambda (relate_p (ec_unique_p $0 puddle_p) (ec_unique_p $0 rock_p) right_p))", # test relate right
-  "(lambda (relate_n_p (ec_unique_p $0 star_p) (ec_unique_p $0 rock_p) right 1))", # test relate_n 1
-  "(lambda (relate_n_p (ec_unique_p $0 star_p) (ec_unique_p $0 spade_p) up 2))", # test relate_n 2,
+  "(lambda (relate_n_p (ec_unique_p $0 star_p) (ec_unique_p $0 rock_p) right_p 1_p))", # test relate_n 1
+  "(lambda (relate_n_p (ec_unique_p $0 circle_p) (ec_unique_p $0 diamond_p) up_p 2_p))", # test relate_n 2,
   "(lambda (in_half_p (ec_unique_p $0 star_p) up_p))", # test in half
   "(lambda (in_half_p (ec_unique_p $0 star_p) right_p))", # test in half
   "(lambda (in_half_p (ec_unique_p $0 star_p) down_p))", # test in half
   "(lambda (in_half_p (ec_unique_p $0 star_p) left_p))", # test in half
-  "(lambda (in_half_p (ec_unique_p $0 triangle) up_p))", # test in half
-  "(lambda (in_half_p (ec_unique_p $0 triangle) right_p))", # test in half
-  "(lambda (in_half_p (ec_unique_p $0 triangle) down_p))", # test in half
-  "(lambda (in_half_p (ec_unique_p $0 triangle) left_p))", # test in half
+  "(lambda (in_half_p (ec_unique_p $0 heart_p) up_p))", # test in half
+  "(lambda (in_half_p (ec_unique_p $0 heart_p) right_p))", # test in half
+  "(lambda (in_half_p (ec_unique_p $0 heart_p) down_p))", # test in half
+  "(lambda (in_half_p (ec_unique_p $0 heart_p) left_p))", # test in half
   "(lambda (is_edge_p (ec_unique_p $0 circle_p)))", # test is_edge
   "(lambda (is_edge_p (ec_unique_p $0 star_p)))", # test is_edge
-  "(lambda (is_edge_p (ec_unique_p $0 rock_p)))", # test is_edge
+  "(lambda (is_edge_p (ec_unique_p $0 diamond_p)))", # test is_edge
   "(lambda (is_edge_p (ec_unique_p $0 heart_p)))", # test is_edge
 ]
 
