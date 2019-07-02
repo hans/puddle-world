@@ -266,6 +266,7 @@ class ECLanguageLearner:
 
 ### Additional command line arguments for Puddleworld.
 def puddleworld_options(parser):
+    # PyCCG + Dreamcoder arguments.
     parser.add_argument(
         "--disable_pyccg_enum",
         dest="use_pyccg_enum",
@@ -277,6 +278,13 @@ def puddleworld_options(parser):
         dest="use_blind_enum",
         action="store_false",
         help='Whether to disable blind multicore enumeration to enumerate sentence parses.'
+        )
+
+    # Puddleworld-specific.
+    parser.add_argument(
+        "--use_initial_lexicon",
+        action="store_true",
+        help='Initialize PyCCG learner with a predefined initial lexicon.'
         )
     parser.add_argument(
         "--local",
@@ -360,43 +368,33 @@ if __name__ == "__main__":
         baseGrammar = Grammar.uniform(puddleworldPrimitives)
         print(baseGrammar.json())
 
-
+        # Initialize the language learner driver.
         use_pyccg_enum, use_blind_enum = args.pop('use_pyccg_enum'), args.pop('use_blind_enum')
         print("Using PyCCG enumeration: %s, using blind enumeration: %s" % (str(use_pyccg_enum), str(use_blind_enum)))
-        # Initialize the language learner driver.
-        ##### DEBUGGING (cathy)
-        # (note: cathy - to debug, jankily run with made up arguments, but we don't actually wanna do that,)
-        pyccg_learner = WordLearner(initial_puddleworld_lex)
+        
+        if args.pop('use_initial_lexicon'):
+            print("Using initial lexicon for Puddleworld PyCCG learner.")
+            pyccg_learner = WordLearner(initial_puddleworld_lex)
+        else:
+            pyccg_learner = WordLearner(None)
+
         learner = ECLanguageLearner(pyccg_learner, 
             ec_ontology_translation_fn=puddleworld_ec_translation_fn,
             use_pyccg_enum=use_pyccg_enum,
             use_blind_enum=use_blind_enum)
 
-        tasks, maximumFrontier, enumerationTimeout, CPUs, solver, evaluationTimeout = localTrain[:10], 2, 2, 5, 'python', 5
-        learner.wake_generative_with_pyccg(baseGrammar, tasks, 
-                    maximumFrontier,
-                    enumerationTimeout,
-                    CPUs,
-                    solver,
-                    evaluationTimeout)
-
-        assert False
-        ##### DEBUGGING (cathy)
-        ##### DEBUGGING UNCOMMENT BELOW WHEN DONE (cathy)
-
-
         # Run Dreamcoder exploration/compression.
-        # explorationCompression(baseGrammar, allTrain, 
-        #                         testingTasks=allTest, 
-        #                         outputPrefix=outputDirectory, **args)
+        explorationCompression(baseGrammar, allTrain, 
+                                testingTasks=allTest, 
+                                outputPrefix=outputDirectory, 
+                                custom_wake_generative=learner.wake_generative_with_pyccg,
+                                **args)
 
     
 
 
-
-
-
-    ### Checkpoint analyses. Can be safely ignored to run the learner itself.
+    ###################################################################################################  
+    ### Checkpoint analyses. Can be safely ignored to run the PyCCG+Dreamcoder learner itself.
     # These are in this file because Dill is silly and requires loading from the original calling file.
     if checkpoint_analysis is not None:
         # Load the checkpoint.
