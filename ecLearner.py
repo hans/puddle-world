@@ -17,9 +17,11 @@ import random
 import string
 
 from ec import explorationCompression, commandlineArguments, Task, ecIterator
+from frontier import Frontier, FrontierEntry
 from enumeration import * # EC enumeration.
 from taskRankGraphs import plotEmbeddingWithLabels
 from grammar import Grammar
+from program import Program
 from utilities import eprint, numberOfCPUs
 from recognition import *
 from task import *
@@ -27,7 +29,7 @@ from task import *
 from pyccg.lexicon import Lexicon
 from pyccg.word_learner import WordLearner
 
-from puddleworldOntology import ec_ontology, process_scene
+from puddleworldOntology import ec_ontology, process_scene, puddleworld_ec_translation_fn
 from puddleworldTasks import *
 from utils import convertOntology, ecTaskAsPyCCGUpdate
 
@@ -114,34 +116,105 @@ initial_puddleworld_lex = Lexicon.fromstring(r"""
 class ECLanguageLearner:
     """
     ECLanguageLearner: driver class that manages learning between PyCCG and EC.
+
+    ec_ontology_translation_fn: runs on the EC/PyCCG program strings if there are any ontology renaming conversions.
+    use_pyccg_enum: if True: use PyCCG parsing to discover sentence frontiers.
+    use_blind_enum: if True: to use blind enumeration on unsolved frontiers.
     """
     def __init__(self,
-                pyccg_learner):
+                pyccg_learner,
+                ec_ontology_translation_fn=None,
+                use_pyccg_enum=False,
+                use_blind_enum=False):
+
                 self.pyccg_learner = pyccg_learner
+                self.ec_ontology_translation_fn = ec_ontology_translation_fn
+                self.use_pyccg_enum = use_pyccg_enum
+                self.use_blind_enum = use_blind_enum
+
 
     def _update_pyccg_timeout(self, update, timeout):
-        import time
-        import multiprocessing
-        
+        """
+        Wraps PyCCG update with distant in a timeout.
+        Returns: list of (S-expression semantics, logProb) tuples found for the sentence within the timeout.
+        """
+        import signal
+        def timeout_handler(signum, frame):
+            raise Exception("PyCCG enumeration timeout.")
 
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(timeout) # Start the stopwatch.
+        results = None
+        try:
+            instruction, model, goal = update
+            results = self.pyccg_learner.update_with_distant(instruction, model, goal)
+        except Exception:
+            pass
+
+        weighted_meanings = []
+        if results and len(results) > 0:
+            for result in results:
+                log_probability = result[1]
+                root_token, _ = result[0].label()
+                meaning = root_token.semantics()
+                weighted_meanings.append((meaning, log_probability))
+        return weighted_meanings
 
 
     def _update_pyccg_with_distant_batch(self, tasks, timeout):
         """
         Sequential update of PyCCG with distant batch. Returns discovered parses.
         Ret:
-            pyccg_meanings: dict from task -> PyCCG meanings for the sentence, 
+            pyccg_meanings: dict from task -> PyCCG S-expression semantics for the sentence, 
                             or None if no expression was found.
         """
-        pyccg_meanings = {t: _update_pyccg_timeout(ecTaskAsPyCCGUpdate(task), timeout) for t in tasks}
+        pyccg_meanings = {t: self._update_pyccg_timeout(ecTaskAsPyCCGUpdate(t, self.pyccg_learner.ontology), timeout) for t in tasks}
         return pyccg_meanings
+
+    def _update_pyccg_with_supervised_batch(self, frontiers):
+        """
+        Sequential update of PyCCG supervised on EC frontiers.
+        """
+        for frontier in frontiers:
+            instruction, model, goal = ecTaskAsPyCCGUpdate(frontier.task, self.pyccg_learner.ontology)
+            for entry in frontier.entries:
+                if self.ec_ontology_translation_fn:
+                    ec_expr = str(entry.program) if self.ec_ontology_translation_fn is None else self.ec_ontology_translation_fn(str(entry.program), is_pyccg_to_ec=False)
+                converted = self.pyccg_learner.ontology.read_ec_sexpr(ec_expr)
+                # TODO (catwong, jgauthier): no update with supervised.
+                print("****ALERT: NOT YET IMPLEMENTED FULLY: NO PYCCG UDPATE WITH SUPERVISED *****")
 
     def _pyccg_meanings_to_ec_frontiers(self, pyccg_meanings):
         """
         Ret:
             pyccg_frontiers: dict from task -> Dreamcoder frontiers.
         """
-        return None
+        pyccg_frontiers = {}
+        for task in pyccg_meanings:
+            if len(pyccg_meanings[task]) > 0:
+                frontier_entries = []
+                for (meaning, log_prob) in pyccg_meanings[task]:
+                    ec_sexpr = self.pyccg_learner.ontology.as_ec_sexpr(meaning)
+                    if self.ec_ontology_translation_fn:
+                        ec_sexpr = self.ec_ontology_translation_fn(ec_sexpr, is_pyccg_to_ec=True)
+
+                    # Uses the p=1.0 likelihood for programs that solve the task.
+                    frontier_entry = FrontierEntry(
+                        program=Program.parse(ec_sexpr),
+                        logPrior=log_prob, 
+                        logLikelihood=0.0)
+                    frontier_entries.append(frontier_entry)
+
+                pyccg_frontiers[task] = Frontier(frontier_entries, task)
+        return pyccg_frontiers
+
+    def _describe_pyccg_results(self, pyccg_results):
+        for task in pyccg_results:
+            if len(pyccg_results[task]) > 0:
+                best_program, best_prob = pyccg_results[task][0]
+                print('HIT %s w/ %s, logProb = %s' %(task.name, str(best_program), str(best_prob)))
+            else:
+                print('MISS %s' % task.name)
 
     def wake_generative_with_pyccg(self,
                     grammar, tasks, 
@@ -158,30 +231,61 @@ class ECLanguageLearner:
         Converts the meanings into EC-style frontiers to be handed off to EC.
         """
         # Enumerate PyCCG meanings and update the word learner.
-        pyccg_meanings = self._update_pyccg_with_distant_batch(tasks, enumerationTimeout)
-
+        pyccg_meanings = {t : [] for t in tasks}
+        if self.use_pyccg_enum:
+            pyccg_meanings = self._update_pyccg_with_distant_batch(tasks, enumerationTimeout)
+       
         # Enumerate the remaining tasks using EC-style blind enumeration.
-        unsolved_tasks = [task for task in tasks if pyccg_meanings[task] is None]
-        fallback_frontiers, fallback_times = multicoreEnumeration(grammar, tasks, 
-                                                   maximumFrontier=maximumFrontier,
-                                                   enumerationTimeout=enumerationTimeout,
-                                                   CPUs=CPUs,
-                                                   solver=solver,
-                                                   evaluationTimeout=evaluationTimeout)
+        unsolved_tasks = [task for task in tasks if len(pyccg_meanings[task]) == 0]
+        fallback_frontiers, fallback_times = [], None
+        if self.use_blind_enum:
+            fallback_frontiers, fallback_times = multicoreEnumeration(grammar, unsolved_tasks, 
+                                                       maximumFrontier=maximumFrontier,
+                                                       enumerationTimeout=enumerationTimeout,
+                                                       CPUs=CPUs,
+                                                       solver=solver,
+                                                       evaluationTimeout=evaluationTimeout)
+
+        # Log enumeration results.
+        print("PyCCG model parsing results")
+        self._describe_pyccg_results(pyccg_meanings)
+        print("Non-language generative model enumeration results:")
+        print(Frontier.describe(fallback_frontiers))
+
         # Update PyCCG model with fallback discovered frontiers.
-                # TODO(catwong): Just create the SExpressions here since they aren't 'meanings'.
-                # TODO: just update_with_supervised one at a time in a loop.
+        self._update_pyccg_with_supervised_batch(fallback_frontiers) # TODO(catwong, jgauthier): does not yet update.
 
         # Convert and consolidate PyCCG meanings and fallback frontiers for handoff to EC.
         pyccg_frontiers = self._pyccg_meanings_to_ec_frontiers(pyccg_meanings)
-        all_frontiers = {t : pyccg_frontiers[t] if t in pyccg_frontiers else fallback_frontiers[t]}
-        all_times = {t : enumerationTimeout if t in pyccg_frontiers else fallback_times[t]}
+        fallback_frontiers = {frontier.task : frontier for frontier in fallback_frontiers}
+        all_frontiers = {t : pyccg_frontiers[t] if t in pyccg_frontiers else fallback_frontiers[t] for t in tasks}
+        all_times = {t : enumerationTimeout if t in pyccg_frontiers else fallback_times[t] for t in tasks}
 
-        return all_frontiers, all_times
+        return list(all_frontiers.values()), all_times
             
 
 ### Additional command line arguments for Puddleworld.
 def puddleworld_options(parser):
+    # PyCCG + Dreamcoder arguments.
+    parser.add_argument(
+        "--disable_pyccg_enum",
+        dest="use_pyccg_enum",
+        action="store_false",
+        help='Whether to disable PyCCG to enumerate sentence parses.'
+        )
+    parser.add_argument(
+        "--disable_blind_enum",
+        dest="use_blind_enum",
+        action="store_false",
+        help='Whether to disable blind multicore enumeration to enumerate sentence parses.'
+        )
+
+    # Puddleworld-specific.
+    parser.add_argument(
+        "--use_initial_lexicon",
+        action="store_true",
+        help='Initialize PyCCG learner with a predefined initial lexicon.'
+        )
     parser.add_argument(
         "--local",
         action="store_true",
@@ -265,34 +369,32 @@ if __name__ == "__main__":
         print(baseGrammar.json())
 
         # Initialize the language learner driver.
-        ##### DEBUGGING (cathy)
-        # (note: cathy - to debug, jankily run with made up arguments, but we don't actually wanna do that,)
-        pyccg_learner = WordLearner(initial_puddleworld_lex)
-        learner = ECLanguageLearner(pyccg_learner)
+        use_pyccg_enum, use_blind_enum = args.pop('use_pyccg_enum'), args.pop('use_blind_enum')
+        print("Using PyCCG enumeration: %s, using blind enumeration: %s" % (str(use_pyccg_enum), str(use_blind_enum)))
+        
+        if args.pop('use_initial_lexicon'):
+            print("Using initial lexicon for Puddleworld PyCCG learner.")
+            pyccg_learner = WordLearner(initial_puddleworld_lex)
+        else:
+            pyccg_learner = WordLearner(None)
 
-        tasks, maximumFrontier, enumerationTimeout, CPUs, solver, evaluationTimeout = localTrain[5], 2, 5, 1, 'python', 5
-        learner.wake_generative_with_pyccg(baseGrammar, tasks, 
-                    maximumFrontier,
-                    enumerationTimeout,
-                    CPUs,
-                    solver,
-                    evaluationTimeout)
+        learner = ECLanguageLearner(pyccg_learner, 
+            ec_ontology_translation_fn=puddleworld_ec_translation_fn,
+            use_pyccg_enum=use_pyccg_enum,
+            use_blind_enum=use_blind_enum)
 
-        assert False
-        ##### DEBUGGING (cathy)
-        ##### DEBUGGING UNCOMMENT BELOW WHEN DONE (cathy)
         # Run Dreamcoder exploration/compression.
-        # explorationCompression(baseGrammar, allTrain, 
-        #                         testingTasks=allTest, 
-        #                         outputPrefix=outputDirectory, **args)
+        explorationCompression(baseGrammar, allTrain, 
+                                testingTasks=allTest, 
+                                outputPrefix=outputDirectory, 
+                                custom_wake_generative=learner.wake_generative_with_pyccg,
+                                **args)
 
     
 
 
-
-
-
-    ### Checkpoint analyses. Can be safely ignored to run the learner itself.
+    ###################################################################################################  
+    ### Checkpoint analyses. Can be safely ignored to run the PyCCG+Dreamcoder learner itself.
     # These are in this file because Dill is silly and requires loading from the original calling file.
     if checkpoint_analysis is not None:
         # Load the checkpoint.

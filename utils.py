@@ -100,7 +100,6 @@ def ecTaskAsPyCCGUpdate(task, ontology):
     scene, goal = scene[0], goal
     return tokenized, Model(scene, ontology), goal
 
-
 if __name__ == "__main__":
     print("Demo: puddleworld ontology conversion.")
     import numpy as np
