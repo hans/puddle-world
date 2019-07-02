@@ -28,7 +28,6 @@ from task import *
 
 from pyccg.lexicon import Lexicon
 from pyccg.word_learner import WordLearner
-from pyccg.logic import read_ec_sexpr
 
 from puddleworldOntology import ec_ontology, process_scene, puddleworld_ec_translation_fn
 from puddleworldTasks import *
@@ -118,14 +117,20 @@ class ECLanguageLearner:
     """
     ECLanguageLearner: driver class that manages learning between PyCCG and EC.
 
-    ec_ontology_translation_fn: runs on the EC program string if there are any function naming conversions.
+    ec_ontology_translation_fn: runs on the EC/PyCCG program strings if there are any ontology renaming conversions.
+    use_pyccg_enum: if True: use PyCCG parsing to discover sentence frontiers.
+    use_blind_enum: if True: to use blind enumeration on unsolved frontiers.
     """
     def __init__(self,
                 pyccg_learner,
-                ec_ontology_translation_fn=None):
+                ec_ontology_translation_fn=None,
+                use_pyccg_enum=False,
+                use_blind_enum=False):
 
                 self.pyccg_learner = pyccg_learner
                 self.ec_ontology_translation_fn = ec_ontology_translation_fn
+                self.use_pyccg_enum = use_pyccg_enum
+                self.use_blind_enum = use_blind_enum
 
 
     def _update_pyccg_timeout(self, update, timeout):
@@ -175,7 +180,7 @@ class ECLanguageLearner:
             for entry in frontier.entries:
                 if self.ec_ontology_translation_fn:
                     ec_expr = str(entry.program) if self.ec_ontology_translation_fn is None else self.ec_ontology_translation_fn(str(entry.program), is_pyccg_to_ec=False)
-                converted = read_ec_sexpr(ec_expr)
+                converted = self.pyccg_learner.ontology.read_ec_sexpr(ec_expr)
                 # TODO (catwong, jgauthier): no update with supervised.
                 print("****ALERT: NOT YET IMPLEMENTED FULLY: NO PYCCG UDPATE WITH SUPERVISED *****")
 
@@ -194,7 +199,6 @@ class ECLanguageLearner:
                         ec_sexpr = self.ec_ontology_translation_fn(ec_sexpr, is_pyccg_to_ec=True)
 
                     # Uses the p=1.0 likelihood for programs that solve the task.
-                    # TODO(cathywong): this cannot work if we haven't already registered the primitives
                     frontier_entry = FrontierEntry(
                         program=Program.parse(ec_sexpr),
                         logPrior=log_prob, 
@@ -227,19 +231,22 @@ class ECLanguageLearner:
         Converts the meanings into EC-style frontiers to be handed off to EC.
         """
         # Enumerate PyCCG meanings and update the word learner.
-
-
-        pyccg_meanings = self._update_pyccg_with_distant_batch(tasks, enumerationTimeout)
+        pyccg_meanings = {t : [] for t in tasks}
+        if self.use_pyccg_enum:
+            pyccg_meanings = self._update_pyccg_with_distant_batch(tasks, enumerationTimeout)
        
         # Enumerate the remaining tasks using EC-style blind enumeration.
         unsolved_tasks = [task for task in tasks if len(pyccg_meanings[task]) == 0]
-        fallback_frontiers, fallback_times = multicoreEnumeration(grammar, unsolved_tasks, 
-                                                   maximumFrontier=maximumFrontier,
-                                                   enumerationTimeout=enumerationTimeout,
-                                                   CPUs=CPUs,
-                                                   solver=solver,
-                                                   evaluationTimeout=evaluationTimeout)
+        fallback_frontiers, fallback_times = [], None
+        if self.use_blind_enum:
+            fallback_frontiers, fallback_times = multicoreEnumeration(grammar, unsolved_tasks, 
+                                                       maximumFrontier=maximumFrontier,
+                                                       enumerationTimeout=enumerationTimeout,
+                                                       CPUs=CPUs,
+                                                       solver=solver,
+                                                       evaluationTimeout=evaluationTimeout)
 
+        # Log enumeration results.
         print("PyCCG model parsing results")
         self._describe_pyccg_results(pyccg_meanings)
         print("Non-language generative model enumeration results:")
@@ -259,6 +266,18 @@ class ECLanguageLearner:
 
 ### Additional command line arguments for Puddleworld.
 def puddleworld_options(parser):
+    parser.add_argument(
+        "--disable_pyccg_enum",
+        dest="use_pyccg_enum",
+        action="store_false",
+        help='Whether to disable PyCCG to enumerate sentence parses.'
+        )
+    parser.add_argument(
+        "--disable_blind_enum",
+        dest="use_blind_enum",
+        action="store_false",
+        help='Whether to disable blind multicore enumeration to enumerate sentence parses.'
+        )
     parser.add_argument(
         "--local",
         action="store_true",
@@ -342,12 +361,16 @@ if __name__ == "__main__":
         print(baseGrammar.json())
 
 
-
+        use_pyccg_enum, use_blind_enum = args.pop('use_pyccg_enum'), args.pop('use_blind_enum')
+        print("Using PyCCG enumeration: %s, using blind enumeration: %s" % (str(use_pyccg_enum), str(use_blind_enum)))
         # Initialize the language learner driver.
         ##### DEBUGGING (cathy)
         # (note: cathy - to debug, jankily run with made up arguments, but we don't actually wanna do that,)
         pyccg_learner = WordLearner(initial_puddleworld_lex)
-        learner = ECLanguageLearner(pyccg_learner, ec_ontology_translation_fn=puddleworld_ec_translation_fn)
+        learner = ECLanguageLearner(pyccg_learner, 
+            ec_ontology_translation_fn=puddleworld_ec_translation_fn,
+            use_pyccg_enum=use_pyccg_enum,
+            use_blind_enum=use_blind_enum)
 
         tasks, maximumFrontier, enumerationTimeout, CPUs, solver, evaluationTimeout = localTrain[:10], 2, 2, 5, 'python', 5
         learner.wake_generative_with_pyccg(baseGrammar, tasks, 
