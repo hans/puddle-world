@@ -1,6 +1,7 @@
 """Puddleworld tasks: Gridworld scenes of objects and NL instructions."""
 
 import numpy as np
+import string
 
 from task import *
 
@@ -18,6 +19,9 @@ def loadPuddleWorldTasks(datafile='data/puddleworld.json'):
 
 def makePuddleworldTask(raw_task, input_type, output_type):
     _, objects, instructions, goal = raw_task
+    remove_punctuation = str.maketrans('', '', string.punctuation)
+    instructions = instructions.translate(remove_punctuation)
+
     scene = process_scene(objects) # Convert into a PyCCG-style scene.
     task = Task(name=instructions,
                 request=arrow(input_type, output_type),
