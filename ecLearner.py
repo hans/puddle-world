@@ -142,13 +142,15 @@ class ECLanguageLearner:
         def timeout_handler(signum, frame):
             raise Exception("PyCCG enumeration timeout.")
 
-        signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(timeout) # Start the stopwatch.
         results = None
         try:
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(timeout) # Start the stopwatch.
             instruction, model, goal = update
             results = self.pyccg_learner.update_with_distant(instruction, model, goal)
+            signal.alarm(0) # Disable the stopwatch.
         except Exception:
+            print("Timeout for t=%d on: %s" % (timeout, instruction))
             pass
 
         weighted_meanings = []
@@ -256,7 +258,12 @@ class ECLanguageLearner:
         self._update_pyccg_with_supervised_batch(fallback_frontiers) # TODO(catwong, jgauthier): does not yet update.
 
         # Convert and consolidate PyCCG meanings and fallback frontiers for handoff to EC.
-        pyccg_frontiers = self._pyccg_meanings_to_ec_frontiers(pyccg_meanings)
+        if not self.use_blind_enum:
+            print("****ALERT: SKIPPING PYCCG MEANING CONVERSION DUE TO ONTOLOGY MISMATCH *****") # TODO (catwong)
+            pyccg_frontiers = {t : Frontier([], t) for t in tasks}
+        else:
+            pyccg_frontiers = self._pyccg_meanings_to_ec_frontiers(pyccg_meanings)
+        
         fallback_frontiers = {frontier.task : frontier for frontier in fallback_frontiers}
         all_frontiers = {t : pyccg_frontiers[t] if t in pyccg_frontiers else fallback_frontiers[t] for t in tasks}
         all_times = {t : enumerationTimeout if t in pyccg_frontiers else fallback_times[t] for t in tasks}
