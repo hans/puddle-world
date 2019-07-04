@@ -31,7 +31,7 @@ from pyccg.word_learner import WordLearner
 
 from puddleworldOntology import ec_ontology, process_scene, puddleworld_ec_translation_fn
 from puddleworldTasks import *
-from utils import convertOntology, ecTaskAsPyCCGUpdate
+from utils import convertOntology, ecTaskAsPyCCGUpdate, filter_tasks_mlu
 
 
 class InstructionsFeatureExtractor(RecurrentFeatureExtractor):
@@ -279,6 +279,12 @@ def puddleworld_options(parser):
         action="store_false",
         help='Whether to disable blind multicore enumeration to enumerate sentence parses.'
         )
+    parser.add_argument(
+        "--mlu_cap",
+        default=None,
+        type=int,
+        help='If provided, cap tasks by MLU.'
+        )
 
     # Puddleworld-specific.
     parser.add_argument(
@@ -362,6 +368,13 @@ if __name__ == "__main__":
         eprint("Using local tasks: %d train, %d test" % (len(localTrain), len(localTest)))
         eprint("Using global tasks: %d train, %d test" % (len(globalTrain), len(globalTest)))
         eprint("Using tiny tasks of size %d: %d train, %d test" % (tiny_size, len(tinyTrain), len(tinyTest)))
+
+        # Cap tasks by maximum length utterance (using a tokenizer)
+        mlu_cap = args.pop('mlu_cap')
+        if mlu_cap:
+            eprint("Filtering by Maximum MLU: %d" % mlu_cap)
+            allTrain, allTest = filter_tasks_mlu(allTrain, mlu_cap), filter_tasks_mlu(allTest, mlu_cap)
+
         eprint("Using total tasks: %d train, %d test" % (len(allTrain), len(allTest)))
 
         # Make Dreamcoder grammar.
