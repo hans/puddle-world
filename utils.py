@@ -100,6 +100,23 @@ def ecTaskAsPyCCGUpdate(task, ontology):
     scene, goal = scene[0], goal
     return tokenized, Model(scene, ontology), goal
 
+### Other convenience functions.
+def filter_tasks_mlu(tasks, mlu):
+    """
+    Returns only tasks up to a set maximum instruction length.
+    Uses a 'tokenizer' just by splitting on spaces.
+    """
+    
+    # For convenience, also alphabetize within each description length.
+    mlu_tasks = []
+    for utterance_len in range(mlu+1):
+        utterances = [t for t in tasks if len(t.features.split(" ")) == utterance_len]
+        utterances = sorted(utterances, key = lambda t: t.features)
+        mlu_tasks += utterances
+    return mlu_tasks
+
+    #return [t for t in tasks if len(t.features.split(" ")) <= mlu]
+
 if __name__ == "__main__":
     print("Demo: puddleworld ontology conversion.")
     import numpy as np
