@@ -17,13 +17,14 @@ def loadPuddleWorldTasks(datafile='data/puddleworld.json'):
         result = json.load(f)
     return result
 
-def makePuddleworldTask(raw_task, input_type, output_type):
+def makePuddleworldTask(raw_task, input_type, output_type, id_num=None):
     _, objects, instructions, goal = raw_task
     remove_punctuation = str.maketrans('', '', string.punctuation)
-    instructions = instructions.translate(remove_punctuation)
+    instructions = instructions.translate(remove_punctuation).strip()
 
     scene = process_scene(objects) # Convert into a PyCCG-style scene.
-    task = Task(name=instructions,
+    name = instructions if id_num is None else instructions + ("_%s" % str(id_num))
+    task = Task(name=name,
                 request=arrow(input_type, output_type),
                 examples=[([scene], tuple(goal))],
                 features=instructions)
@@ -41,7 +42,7 @@ def makeTasks(train_key, test_key, input_type, output_type):
         return [dataset[idx] for idx in sorted_idxs]
 
     sorted_train, sorted_test = sort_by_instruction(raw_train), sort_by_instruction(raw_test)
-    train, test = [makePuddleworldTask(task, input_type, output_type) for task in sorted_train], [makePuddleworldTask(task, input_type, output_type) for task in sorted_test]
+    train, test = [makePuddleworldTask(task, input_type, output_type, ind) for ind, task in enumerate(sorted_train)], [makePuddleworldTask(task, input_type, output_type, ind) for ind, task in enumerate(sorted_test)]
     return train, test
 
 def makeLocalTasks(input_type, output_type):
