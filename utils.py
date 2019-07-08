@@ -10,9 +10,9 @@ sys.path.insert(0, "../pyccg/nltk")
 ####
 import string
 
-import type as ec_type
-import program as ec_program
-from utilities import curry
+import dreamcoder.type as ec_type
+import dreamcoder.program as ec_program
+from dreamcoder.utilities import curry
 
 from pyccg.chart import WeightedCCGChartParser, printCCGDerivation
 from pyccg.model import Model

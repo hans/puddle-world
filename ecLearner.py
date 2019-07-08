@@ -16,15 +16,16 @@ import os
 import random
 import string
 
-from ec import explorationCompression, commandlineArguments, Task, ecIterator
-from frontier import Frontier, FrontierEntry
-from enumeration import * # EC enumeration.
-from taskRankGraphs import plotEmbeddingWithLabels
-from grammar import Grammar
-from program import Program
-from utilities import eprint, numberOfCPUs
-from recognition import *
-from task import *
+from bin.taskRankGraphs import plotEmbeddingWithLabels
+
+from dreamcoder.ec import explorationCompression, commandlineArguments, Task, ecIterator
+from dreamcoder.frontier import Frontier, FrontierEntry
+from dreamcoder.enumeration import * # EC enumeration.
+from dreamcoder.grammar import Grammar
+from dreamcoder.program import Program
+from dreamcoder.utilities import eprint, numberOfCPUs
+from dreamcoder.recognition import *
+from dreamcoder.task import *
 
 from pyccg.lexicon import Lexicon
 from pyccg.word_learner import WordLearner
