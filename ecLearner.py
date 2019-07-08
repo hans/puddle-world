@@ -29,7 +29,7 @@ from task import *
 from pyccg.lexicon import Lexicon
 from pyccg.word_learner import WordLearner
 
-from puddleworldOntology import ec_ontology, process_scene, puddleworld_ec_translation_fn
+from puddleworldOntology import ontology, ec_ontology, process_scene, puddleworld_ec_translation_fn
 from puddleworldTasks import *
 from utils import convertOntology, ecTaskAsPyCCGUpdate, filter_tasks_mlu
 
@@ -79,39 +79,39 @@ initial_puddleworld_lex = Lexicon.fromstring(r"""
 
   reach => S/N {\x.move(x)}
   reach => S/N {\x.move(unique(x))}
-  below => S/N {\x.move(unique(\y.relate(y,x,down)))}
-  above => S/N {\x.move(unique(\y.relate(y,x,up)))}
+  # below => S/N {\x.move(unique(\y.relate(y,x,down)))}
+  # above => S/N {\x.move(unique(\y.relate(y,x,up)))}
 
   , => S\S/S {\a b.a}
   , => S\S/S {\a b.b}
-
-  of => N\N/N {\x d y.relate(x,y,d)}
-  of => N\N/N {\x d y.relate(unique(x),d,y)}
+  
+  # of => N\N/N {\x d y.relate(x,y,d)}
+  # of => N\N/N {\x d y.relate(unique(x),d,y)}
   to => N\N/N {\x y.x}
 
-  one => S/N/N {\d x.move(unique(\y.relate(y,x,d)))}
-  one => S/N/N {\d x.move(unique(\y.relate_n(y,x,d,1)))}
+  # one => S/N/N {\d x.move(unique(\y.relate(y,x,d)))}
+  # one => S/N/N {\d x.move(unique(\y.relate_n(y,x,d,1)))}
   right => N/N {\f x.and_(apply(f, x),in_half(x,right))}
 
-  most => N\N/N {\x d.max_in_dir(x, d)}
+  # most => N\N/N {\x d.max_in_dir(x, d)}
 
-  the => N/N {\x.unique(x)}
+  # the => N/N {\x.unique(x)}
 
-  left => N {left}
-  below => N {down}
-  above => N {up}
-  right => N {right}
-  horse => N {\x.horse(x)}
-  rock => N {\x.rock(x)}
-  rock => N {unique(\x.rock(x))}
-  cell => N {\x.true}
-  spade => N {\x.spade(x)}
-  spade => N {unique(\x.spade(x))}
-  heart => N {\x.heart(x)}
-  heart => N {unique(\x.heart(x))}
-  circle => N {\x.circle(x)}
+  # left => N {left}
+  # below => N {down}
+  # above => N {up}
+  # right => N {right}
+  # horse => N {\x.horse(x)}
+  # rock => N {\x.rock(x)}
+  # rock => N {unique(\x.rock(x))}
+  # cell => N {\x.true}
+  # spade => N {\x.spade(x)}
+  # spade => N {unique(\x.spade(x))}
+  # heart => N {\x.heart(x)}
+  # heart => N {unique(\x.heart(x))}
+  # circle => N {\x.circle(x)}
   # triangle => N {\x.triangle(x)}
-""", ec_ontology, include_semantics=True)
+""", ontology, include_semantics=True)
 
 class ECLanguageLearner:
     """
@@ -392,11 +392,17 @@ if __name__ == "__main__":
         use_pyccg_enum, use_blind_enum = args.pop('use_pyccg_enum'), args.pop('use_blind_enum')
         print("Using PyCCG enumeration: %s, using blind enumeration: %s" % (str(use_pyccg_enum), str(use_blind_enum)))
         
+        PYCCG_MAX_EXPR_DEPTH = 4
+        import logging
+        logger = logging.getLogger()
+        logger.disabled = True
+
+        max_expr_depth = mlu_cap if mlu_cap is not None else PYCCG_MAX_EXPR_DEPTH
         if args.pop('use_initial_lexicon'):
             print("Using initial lexicon for Puddleworld PyCCG learner.")
-            pyccg_learner = WordLearner(initial_puddleworld_lex)
+            pyccg_learner = WordLearner(initial_puddleworld_lex, max_expr_depth=max_expr_depth)
         else:
-            pyccg_learner = WordLearner(None)
+            pyccg_learner = WordLearner(None, max_expr_depth=max_expr_depth)
 
         learner = ECLanguageLearner(pyccg_learner, 
             ec_ontology_translation_fn=puddleworld_ec_translation_fn,
