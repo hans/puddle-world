@@ -15,9 +15,9 @@ import numpy as np
 from pyccg.logic import Expression
 from pyccg.model import Model
 
-from ec import Task
-from type import arrow
-import program as ec_program
+from dreamcoder.ec import Task
+from dreamcoder.type import arrow
+import dreamcoder.program as ec_program
 
 from puddleworldOntology import ontology, ec_ontology, process_scene
 from utils import ecTaskAsPyCCGUpdate, convertOntology
