@@ -32,7 +32,7 @@ from pyccg.word_learner import WordLearner
 
 from puddleworldOntology import ontology, ec_ontology, process_scene, puddleworld_ec_translation_fn
 from puddleworldTasks import *
-from utils import convertOntology, ecTaskAsPyCCGUpdate, filter_tasks_mlu
+from utils import convertOntology, ecTaskAsPyCCGUpdate, filter_tasks_mlu, MLUTaskBatcher
 
 
 class InstructionsFeatureExtractor(RecurrentFeatureExtractor):
@@ -293,6 +293,12 @@ def puddleworld_options(parser):
         type=int,
         help='If provided, cap tasks by MLU.'
         )
+    parser.add_argument(
+        "--mlu_compress",
+        default=None,
+        action="store_true",
+        help='If provided, compress tasks by MLU.'
+        )
 
     # Puddleworld-specific.
     parser.add_argument(
@@ -410,11 +416,20 @@ if __name__ == "__main__":
             use_pyccg_enum=use_pyccg_enum,
             use_blind_enum=use_blind_enum)
 
+        # Initialize any task batchers for the curriculum.
+        mlu_compress = args.pop('mlu_compress')
+        if mlu_compress:
+            task_batcher = MLUTaskBatcher()
+            batcher_fn = task_batcher.getTaskBatch
+        else:
+            batcher_fn = None
+
         # Run Dreamcoder exploration/compression.
         explorationCompression(baseGrammar, allTrain, 
                                 testingTasks=allTest, 
                                 outputPrefix=outputDirectory, 
                                 custom_wake_generative=learner.wake_generative_with_pyccg,
+                                custom_task_batcher=batcher_fn,
                                 **args)
 
     

@@ -115,7 +115,51 @@ def filter_tasks_mlu(tasks, mlu):
         mlu_tasks += utterances
     return mlu_tasks
 
-    #return [t for t in tasks if len(t.features.split(" ")) <= mlu]
+class MLUTaskBatcher:
+    """
+    Returns task batches based on the task MLU length. Repeatedly returns the same batch until 
+    compression fails to change the grammar.
+    """
+    def __init__(self):
+        self.previous_grammar_len = 0
+        self.mlu_tasks = None
+        self.curr_mlu = None
+
+    def getTaskBatch(self, ec_result, tasks, taskBatchSize, currIteration):
+        # Create MLU-based task batches if they do not yet exist.
+        if self.mlu_tasks is None:
+            from collections import defaultdict
+            self.mlu_tasks = defaultdict(list)
+            for t in tasks:
+               utterance_len = len(t.features.split(" "))
+               self.mlu_tasks[utterance_len].append(t)
+            for utterance_len in self.mlu_tasks:
+                self.mlu_tasks[utterance_len] = sorted(self.mlu_tasks[utterance_len], key = lambda t: t.features)
+            self.curr_mlu = min(list(self.mlu_tasks))
+        
+        # Check if the grammar changed to determine whether to increment the utterance length.
+        grammar_len = 0 if len(ec_result.grammars) < 1 else len(ec_result.grammars[-1].productions)
+        grammar_changed = False
+        if grammar_len > self.previous_grammar_len:
+            grammar_changed = True
+            self.previous_grammar_len = grammar_len
+
+        if not grammar_changed:
+            print("Grammar unchanged, incrementing utterance length.")
+            self.curr_mlu += 1
+    
+        print("Using tasks with utterance length: %d" % self.curr_mlu)
+        tasks = self.mlu_tasks[self.curr_mlu]
+
+        if taskBatchSize is None:
+                taskBatchSize = len(tasks)
+        elif taskBatchSize > len(tasks):
+                eprint("Task batch size is greater than total number of tasks, aborting.")
+                assert False
+        start = (taskBatchSize * currIteration) % len(tasks)
+        end = start + taskBatchSize
+        taskBatch = (tasks + tasks)[start:end] # Handle wraparound.
+        return taskBatch
 
 if __name__ == "__main__":
     print("Demo: puddleworld ontology conversion.")
