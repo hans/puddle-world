@@ -10,8 +10,10 @@ import numpy as np
 from tqdm import tqdm
 
 #### Add EC dependency
-sys.path.append("../ec")
-sys.path.append("../pyccg")
+sys.path.insert(0, "../")
+sys.path.insert(0, "../ec/")
+sys.path.insert(0, "../pyccg")
+sys.path.insert(0, "../pyccg/nltk")
 from puddleworldTasks import loadPuddleWorldTasks
 
 from pyccg.chart import WeightedCCGChartParser, printCCGDerivation
@@ -20,7 +22,7 @@ from pyccg.lexicon import Lexicon
 from pyccg.logic import TypeSystem, Ontology, Expression
 from pyccg.word_learner import WordLearner
 
-from puddleworldOntology import ontology, process_scene
+from puddleworldOntology import make_puddleworld_ontology, process_scene
 
 
 #########
@@ -36,7 +38,7 @@ sorted_idxs = lengths.argsort()
 #######
 # Lexicon: defines an initial set of word -> (syntax, meaning) mappings.
 # Weights are initialized uniformly by default.
-
+ontology = make_puddleworld_ontology(ontology_type='pyccg')
 
 initial_lex = Lexicon.fromstring(r"""
   :- S:N

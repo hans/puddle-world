@@ -30,7 +30,7 @@ from dreamcoder.task import *
 from pyccg.lexicon import Lexicon
 from pyccg.word_learner import WordLearner
 
-from puddleworldOntology import ontology, ec_ontology, process_scene, puddleworld_ec_translation_fn
+from puddleworldOntology import make_puddleworld_ontology, process_scene, puddleworld_ec_translation_fn
 from puddleworldTasks import *
 from utils import convertOntology, ecTaskAsPyCCGUpdate, filter_tasks_mlu, MLUTaskBatcher
 
@@ -114,7 +114,7 @@ initial_puddleworld_lex = Lexicon.fromstring(r"""
   # heart => N {unique(\x.heart(x))}
   # circle => N {\x.circle(x)}
   # triangle => N {\x.triangle(x)}
-""", ontology, include_semantics=True)
+""", make_puddleworld_ontology(ontology_type='pyccg'), include_semantics=True)
 
 class ECLanguageLearner:
     """
@@ -304,6 +304,12 @@ def puddleworld_options(parser):
 
     # Puddleworld-specific.
     parser.add_argument(
+        "--ontology",
+        default='default',
+        help='Which ontology: [default, relate_n]',
+        type=str,
+        )
+    parser.add_argument(
         "--use_initial_lexicon",
         action="store_true",
         help='Initialize PyCCG learner with a predefined initial lexicon.'
@@ -370,7 +376,11 @@ if __name__ == "__main__":
         os.system("mkdir -p %s"%outputDirectory)
 
         # Convert pyccg ontology -> Dreamcoder.
-        puddleworldTypes, puddleworldPrimitives = convertOntology(ec_ontology)
+
+        ontology_type = args.pop('ontology')
+        puddleworldOntology = make_puddleworld_ontology(ontology_type)
+
+        puddleworldTypes, puddleworldPrimitives = convertOntology(puddleworldOntology)
         input_type, output_type = puddleworldTypes['model'], puddleworldTypes['action']
 
         # Convert sentences-scenes -> Dreamcoder style tasks.
