@@ -146,8 +146,7 @@ def make_puddleworld_ontology(ontology_type='pyccg'):
 
   if ontology_type == 'pyccg':
     pass
-  elif ontology_type == 'default':
-    pass
+  elif ontology_type == 'default' or ontology_type == 'relate_n':
     functions.extend([types.new_function("ec_unique", ("model", ("object", "boolean"), "object"), ec_fn_unique)])
   elif ontology_type == 'relate_n':
     constants.extend([
