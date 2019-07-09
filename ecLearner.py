@@ -59,7 +59,10 @@ class InstructionsFeatureExtractor(RecurrentFeatureExtractor):
         allTasks = tasks + testingTasks
         for t in allTasks:
             tokens = self._tokenize_string(t.features)
-            lexicon.update(tokens)
+            lexicon.update(tokens) 
+
+        print("Built lexicon from %d tasks, found %d words" % (len(allTasks), len(lexicon)))
+        print(sorted(list(lexicon)))
         return list(lexicon)
 
     def __init__(self, tasks, testingTasks=[], cuda=False):
@@ -67,9 +70,8 @@ class InstructionsFeatureExtractor(RecurrentFeatureExtractor):
         self.useFeatures = True
 
         lexicon = self.build_lexicon(tasks, testingTasks)
-        print("Lexicon len, values", len(lexicon), lexicon[:10])
         super(InstructionsFeatureExtractor, self).__init__(lexicon=lexicon,
-                                                            H=64, # Hidden layer.
+                                                            H=32, # Hidden layer.
                                                             tasks=tasks,
                                                             bidirectional=True,
                                                             cuda=cuda)
