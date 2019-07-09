@@ -19,10 +19,11 @@ from dreamcoder.ec import Task
 from dreamcoder.type import arrow
 import dreamcoder.program as ec_program
 
-from puddleworldOntology import ontology, ec_ontology, process_scene
+from puddleworldOntology import make_puddleworld_ontology, process_scene
 from utils import ecTaskAsPyCCGUpdate, convertOntology
 
-
+ontology = make_puddleworld_ontology('pyccg')
+ec_ontology = make_puddleworld_ontology('default')
 
 SIMPLE_SCENE = np.array(
     [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 8.0, 2.0],

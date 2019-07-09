@@ -102,44 +102,62 @@ def fn_is_edge(obj):
   return obj["col"] in [0, SCENE_WIDTH - 1] or obj["row"] in [0, SCENE_HEIGHT - 1]
 
 
-type_names = ["object", "boolean", "action", "direction", "int"]
-type_names.extend(['model']) # For EC enumeration on grounded scenes
-types = TypeSystem(type_names)
-functions = [
-  types.new_function("move", ("object", "action"), fn_pick),
-  types.new_function("relate", ("object", "object", "direction", "boolean"), fn_relate),
-  types.new_function("relate_n", ("object", "object", "direction", "int", "boolean"), fn_relate_n),
-  types.new_function("unique", (("object", "boolean"), "object"), fn_unique),
-  types.new_function("in_half", ("object", "direction", "boolean"), fn_in_half),
-  types.new_function("apply", (("object", "boolean"), "object", "boolean"), lambda f, o: f(o)),
-  types.new_function("and_", ("boolean", "boolean", "boolean"), lambda a, b: a and b),
-  types.new_function("max_in_dir", ("object", "direction", "boolean"), fn_max_in_dir),
-  types.new_function("is_edge", ("object", "boolean"), fn_is_edge),
-]
-def make_obj_fn(obj):
-  return lambda o: o["type"] == obj
-functions.extend([types.new_function(obj, ("object", "boolean"), make_obj_fn(obj))
-                  for obj in obj_dict.values()])
+## Build ontologies.
+def make_puddleworld_ontology(ontology_type='pyccg'):
+  """
+  ontology_type: 
+    pyccg: includes all of the functions above, for pyccg.
+    default: extends the ontology with a Model-typed EC unique.
+    relate_n: adds more n and removes 'relate' to encourage use of 'relate_n'
+  """
+  # Add types.
+  type_names = ["object", "boolean", "action", "direction", "int"]
+  type_names.extend(['model']) # For EC enumeration on grounded scenes
+  types = TypeSystem(type_names)
 
-constants = [
-  types.new_constant("true", "boolean"),
-  types.new_constant("left", "direction"),
-  types.new_constant("right", "direction"),
-  types.new_constant("up", "direction"),
-  types.new_constant("down", "direction"),
-  types.new_constant("1", "int"),
-  types.new_constant("2", "int"),
-]
+  def make_obj_fn(obj):
+    return lambda o: o["type"] == obj
 
-ontology = Ontology(types, functions, constants)
+  functions = [
+    types.new_function("move", ("object", "action"), fn_pick),
+    types.new_function("relate_n", ("object", "object", "direction", "int", "boolean"), fn_relate_n),
+    types.new_function("unique", (("object", "boolean"), "object"), fn_unique),
+    types.new_function("in_half", ("object", "direction", "boolean"), fn_in_half),
+    types.new_function("apply", (("object", "boolean"), "object", "boolean"), lambda f, o: f(o)),
+    types.new_function("and_", ("boolean", "boolean", "boolean"), lambda a, b: a and b),
+    types.new_function("max_in_dir", ("object", "direction", "boolean"), fn_max_in_dir),
+    types.new_function("is_edge", ("object", "boolean"), fn_is_edge),
+  ]
+  functions.extend([types.new_function(obj, ("object", "boolean"), make_obj_fn(obj))
+                    for obj in obj_dict.values()])
+  
+  if ontology_type != 'relate_n':
+    functions.extend([types.new_function("relate", ("object", "object", "direction", "boolean"), fn_relate)])
 
-# Add model-typed versions of function for EC.
-ec_functions = functions
-ec_functions.extend([
-  types.new_function("ec_unique", ("model", ("object", "boolean"), "object"), ec_fn_unique)
-  ])
-ec_ontology = Ontology(types, ec_functions, constants)
+  constants = [
+    types.new_constant("true", "boolean"),
+    types.new_constant("left", "direction"),
+    types.new_constant("right", "direction"),
+    types.new_constant("up", "direction"),
+    types.new_constant("down", "direction"),
+    types.new_constant("1", "int"),
+    types.new_constant("2", "int"),
+  ]
 
+  if ontology_type == 'pyccg':
+    pass
+  elif ontology_type == 'default':
+    pass
+    functions.extend([types.new_function("ec_unique", ("model", ("object", "boolean"), "object"), ec_fn_unique)])
+  elif ontology_type == 'relate_n':
+    constants.extend([
+      types.new_constant("3", "int"),
+      types.new_constant("4", "int"),
+      types.new_constant("5", "int"),
+    ])
+  else:
+    raise Exception("Invalid ontology type %s" % ontology_type)
+  return Ontology(types, functions, constants)
 
 def process_scene(scene_objects):
   """
@@ -176,10 +194,10 @@ def fn_pick_debug(model):
 def fn_pick_debug2(model):
   return (0, 0)
 
-ec_functions_debug = [
-    types.new_function("ec_unique", ("model", ("object", "boolean"), "object"), ec_fn_unique),
-    types.new_function("move_debug", ("model", "action"), fn_pick_debug),
-    types.new_function("move_debug2", ("model", "action"), fn_pick_debug2),
-    types.new_function("is_obj", ("object", "boolean"), lambda o : True),
-    types.new_function("move", ("object", "action"), fn_pick),
-]
+# ec_functions_debug = [
+#     types.new_function("ec_unique", ("model", ("object", "boolean"), "object"), ec_fn_unique),
+#     types.new_function("move_debug", ("model", "action"), fn_pick_debug),
+#     types.new_function("move_debug2", ("model", "action"), fn_pick_debug2),
+#     types.new_function("is_obj", ("object", "boolean"), lambda o : True),
+#     types.new_function("move", ("object", "action"), fn_pick),
+# ]

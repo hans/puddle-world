@@ -3,9 +3,9 @@
 import numpy as np
 import string
 
-from task import *
+from dreamcoder.task import *
 
-from puddleworldOntology import ec_ontology, process_scene
+from puddleworldOntology import make_puddleworld_ontology, process_scene
 
 #### Utility functions to load and prepare dataset for EC.
 def loadPuddleWorldTasks(datafile='data/puddleworld.json'):
