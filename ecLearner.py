@@ -15,6 +15,7 @@ import numpy as np
 import os
 import random
 import string
+from collections import Counter, defaultdict
 
 from bin.taskRankGraphs import plotEmbeddingWithLabels
 
@@ -123,18 +124,86 @@ class ECLanguageLearner:
     ec_ontology_translation_fn: runs on the EC/PyCCG program strings if there are any ontology renaming conversions.
     use_pyccg_enum: if True: use PyCCG parsing to discover sentence frontiers.
     use_blind_enum: if True: to use blind enumeration on unsolved frontiers.
+    word_reweighting: options to reweight the grammar based on the tasks seen so far.
+    starting_grammar: the original grammar, which can be used for grammar reweighting to emphasize original primitives.
     """
     def __init__(self,
                 pyccg_learner,
                 ec_ontology_translation_fn=None,
                 use_pyccg_enum=False,
-                use_blind_enum=False):
+                use_blind_enum=False,
+                word_reweighting=None,
+                starting_grammar=None):
 
                 self.pyccg_learner = pyccg_learner
                 self.ec_ontology_translation_fn = ec_ontology_translation_fn
                 self.use_pyccg_enum = use_pyccg_enum
                 self.use_blind_enum = use_blind_enum
 
+                self.word_reweighting = word_reweighting
+                self.starting_grammar = set(starting_grammar.primitives) # Names of all starting primitives.
+                self.encountered_tasks = set() # All tasks encountered thus far.
+                self.token_pseudocount = 1.0
+                self.smoothing_constant = 1.0 # How much to smooth based on new words.
+
+    def _tokenize_string(self, features):
+        """Ultra simple tokenizer. Removes punctuation, then splits on spaces."""
+        remove_punctuation = str.maketrans('', '', string.punctuation)
+        tokenized = features.translate(remove_punctuation).lower().split()
+        return tokenized
+
+    def _reweight_unsolved_words(self, tasks, result):
+        """
+        Calculates a task reweighting factor proportional to potentially 'informative' words, which can be used
+        to increase enumeration time, # of frontiers stored, etc.
+
+        Reweighting factor = log((word count in unsolved tasks) / (word count in solved tasks + pseudocount)),
+                            where a current batch of tasks is always considered unsolved.
+
+        :args: 
+            tasks: batch of tasks.
+            result: a previous ECResult, which contains information on unsolved tasks.
+        :ret: dict of {task : reweighting scores.}
+        """
+        # Calculate word reweighting scores for all existing tokens.
+        unsolved_tokens, solved_tokens, all_tokens = defaultdict(float), defaultdict(float), set()
+        for f in result.allFrontiers.values():
+            if f.empty and f.task.name in self.encountered_tasks:
+                for token in self._tokenize_string(f.task.features):
+                     unsolved_tokens[token] += 1
+                     all_tokens.add(token)
+            if not f.empty:
+                for token in self._tokenize_string(f.task.features):
+                     solved_tokens[token] += 1
+                     all_tokens.add(token)
+
+        if len(solved_tokens) == 0: return {task : 0.0 for task in tasks} # If no solved tasks yet, continue.
+
+        word_reweight_scores = {token: np.log(unsolved_tokens[token] + self.token_pseudocount)
+            / (solved_tokens[token] + self.token_pseudocount) for token in all_tokens}
+        print("Using unsolved word-based reweighting, reweighting scores.")
+        print(sorted(word_reweight_scores.items(), key=lambda k: k[1], reverse=True))
+
+        # Reweight for individual tasks.
+        task_reweightings = {}
+        for t in tasks:
+            reweighting_factor = sum([word_reweight_scores[token] for token in self._tokenize_string(t.features)])
+            print(t.name, reweighting_factor)
+            # Hacky: adds the normalizing constant directly to the log likelihoods as a pseudocount.
+            task_reweightings[t] = reweighting_factor
+
+        return task_reweightings
+
+    def _word_reweightings(self, tasks, result):
+        """
+        Returns a dict of {task : reweighting scores} based on task features.
+        """
+        if self.word_reweighting is None:
+            return {task : 0.0 for task in tasks}
+        elif self.word_reweighting == 'unsolved_words':
+            return self._reweight_unsolved_words(tasks, result)
+        else:
+            raise Exception("Unknown word reweighting scheme: %s " % self.word_reweighting)
 
     def _update_pyccg_timeout(self, update, timeout):
         """
@@ -227,7 +296,8 @@ class ECLanguageLearner:
                     enumerationTimeout=None,
                     CPUs=None,
                     solver=None,
-                    evaluationTimeout=None):
+                    evaluationTimeout=None,
+                    result=None):
         """
         Dreamcoder wake_generative using PYCCG enumeration to guide exploration.
 
@@ -235,6 +305,9 @@ class ECLanguageLearner:
         Updates PyCCG using both sets of discovered meanings.
         Converts the meanings into EC-style frontiers to be handed off to EC.
         """
+        # Store the encountered task names.
+        self.encountered_tasks.update([t.name for t in tasks])
+
         # Enumerate PyCCG meanings and update the word learner.
         pyccg_meanings = {t : [] for t in tasks}
         if self.use_pyccg_enum:
@@ -244,21 +317,32 @@ class ECLanguageLearner:
         unsolved_tasks = [task for task in tasks if len(pyccg_meanings[task]) == 0]
         fallback_frontiers, fallback_times = [], None
         if self.use_blind_enum:
-            fallback_frontiers, fallback_times = multicoreEnumeration(grammar, unsolved_tasks, 
-                                                       maximumFrontier=maximumFrontier,
-                                                       enumerationTimeout=enumerationTimeout,
-                                                       CPUs=CPUs,
-                                                       solver=solver,
-                                                       evaluationTimeout=evaluationTimeout)
+            task_reweightings = self._word_reweightings(unsolved_tasks, result)
+            if self.word_reweighting:
+                fallback_frontiers, fallback_times = multicoreEnumeration(grammar, unsolved_tasks, 
+                                                           maximumFrontier=maximumFrontier,
+                                                           enumerationTimeout=enumerationTimeout,
+                                                           CPUs=CPUs,
+                                                           solver=solver,
+                                                           evaluationTimeout=evaluationTimeout,
+                                                           task_reweighting=task_reweightings)
+            else:
+                # Backward compatibility with unmodified multicoreEnumeration.
+                fallback_frontiers, fallback_times = multicoreEnumeration(grammar, unsolved_tasks, 
+                                                           maximumFrontier=maximumFrontier,
+                                                           enumerationTimeout=enumerationTimeout,
+                                                           CPUs=CPUs,
+                                                           solver=solver,
+                                                           evaluationTimeout=evaluationTimeout)
 
         # Log enumeration results.
         print("PyCCG model parsing results")
-        self._describe_pyccg_results(pyccg_meanings)
+        if self.use_pyccg_enum: self._describe_pyccg_results(pyccg_meanings)
         print("Non-language generative model enumeration results:")
         print(Frontier.describe(fallback_frontiers))
 
         # Update PyCCG model with fallback discovered frontiers.
-        self._update_pyccg_with_supervised_batch(fallback_frontiers) # TODO(catwong, jgauthier): does not yet update.
+        if self.use_pyccg_enum: self._update_pyccg_with_supervised_batch(fallback_frontiers) # TODO(catwong, jgauthier): does not yet update.
 
         # Convert and consolidate PyCCG meanings and fallback frontiers for handoff to EC.
         if not self.use_blind_enum:
@@ -300,6 +384,12 @@ def puddleworld_options(parser):
         default=None,
         action="store_true",
         help='If provided, compress tasks by MLU.'
+        )
+    parser.add_argument(
+        "--word_reweighting",
+        default=None,
+        type=str,
+        help='Reweights enumeration time and frontier lengths based on task features. Options: [None, unsolved_words].'
         )
 
     # Puddleworld-specific.
@@ -423,10 +513,13 @@ if __name__ == "__main__":
         else:
             pyccg_learner = WordLearner(None, max_expr_depth=max_expr_depth)
 
+        word_reweighting = args.pop('word_reweighting')
         learner = ECLanguageLearner(pyccg_learner, 
             ec_ontology_translation_fn=puddleworld_ec_translation_fn,
             use_pyccg_enum=use_pyccg_enum,
-            use_blind_enum=use_blind_enum)
+            use_blind_enum=use_blind_enum,
+            word_reweighting=word_reweighting,
+            starting_grammar=baseGrammar)
 
         # Initialize any task batchers for the curriculum.
         mlu_compress = args.pop('mlu_compress')
