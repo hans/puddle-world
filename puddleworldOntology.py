@@ -31,12 +31,17 @@ def ec_fn_tmodel_evaluate(model, expr):
   for u in model['objects']:
     try:
       val = expr(u)
-    except:
+    except Exception as e:
+      print(e)
       val = False
     cf[u] = val
   return cf
 
 def ec_fn_unique(model, expr):
+  print('MODEL')
+  print(model.keys())
+  print("EXPRESSION")
+  print(expr)
   cf = ec_fn_tmodel_evaluate(model, expr)
   return fn_unique(cf)
 
@@ -107,6 +112,7 @@ def make_puddleworld_ontology(ontology_type='pyccg'):
   """
   ontology_type: 
     pyccg: includes all of the functions above, for pyccg.
+    pyccg_model: includes an alternate unique function that only runs on models.
     default: extends the ontology with a Model-typed EC unique.
     relate_n: adds more n and removes 'relate' to encourage use of 'relate_n'
   """
@@ -146,7 +152,7 @@ def make_puddleworld_ontology(ontology_type='pyccg'):
 
   if ontology_type == 'pyccg':
     pass
-  elif ontology_type == 'default' or ontology_type == 'relate_n':
+  elif ontology_type == 'default' or ontology_type == 'relate_n' or ontology_type == 'pyccg_model':
     functions.extend([types.new_function("ec_unique", ("model", ("object", "boolean"), "object"), ec_fn_unique)])
   elif ontology_type == 'relate_n':
     constants.extend([
@@ -169,7 +175,7 @@ def process_scene(scene_objects):
   return {"objects": list(scene_objects.values())}
 
 
-def puddleworld_ec_translation_fn(raw_expr, is_pyccg_to_ec, namespace='_p'):
+def puddleworld_ec_translation_fn(raw_expr, is_pyccg_to_ec, ontology, namespace='_p', ec_fn_tag='ec'):
     """
     Convenience translation function to remove Puddleworld namespacing before conversion
     to S-expr, or add it back.

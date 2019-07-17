@@ -23,6 +23,7 @@ from puddleworldOntology import make_puddleworld_ontology, process_scene
 from utils import ecTaskAsPyCCGUpdate, convertOntology
 
 ontology = make_puddleworld_ontology('pyccg')
+pyccg_model_ontology = make_puddleworld_ontology('pyccg_model')
 ec_ontology = make_puddleworld_ontology('default')
 
 SIMPLE_SCENE = np.array(
@@ -203,6 +204,24 @@ EC_EXPRESSIONS = [
   "(lambda (is_edge_p (ec_unique_p $0 heart_p)))", # test is_edge
 ]
 
+def test_model_based_scene():
+  TINY_SCENE = np.array(
+    [[0.0, 0.0,
+    0.0, 6.0]])
+  expr = Expression.fromstring(r"\x. ec_unique(x, \y.diamond(y))")
+  scene = process_scene([TINY_SCENE])
+  model_object = frozendict(objects=tuple(scene['objects']), type='model')
+  wrapped_scene = {'objects' : [model_object]} 
+  expected = frozendict(row=2, col=9, type="diamond")
+
+  model = Model(wrapped_scene, pyccg_model_ontology)
+  value = model.evaluate(expr)
+  print(expr)
+  print("Expected:", expected)
+  print("Observed:", value)
+
+  eq_(value, expected, msg=None)
+
 
 def _test_case(scene, expression, expected, msg=None):
   from pprint import pprint
@@ -266,7 +285,6 @@ def test_ec_task_as_pyccg_scene():
   eq_(converted_instruction, instruction.split())
   eq_(converted_model.scene, scene)
   eq_(converted_goal, goal)
-
 
 def test_iter_expressions():
   """
