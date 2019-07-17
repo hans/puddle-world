@@ -559,9 +559,13 @@ if __name__ == "__main__":
                                         title, 
                                         file_name)
 
-    def kNN(probe_dict, labels_embeddings, title, key, k=5, best_match=None):
+    def kNN(probe_dict, labels_embeddings, title, key, k=5, closest_n=None):
         """Calculates kNN for each item in labels_embeddings. labels_embeddings = dict from string labels -> embeddings.
-        Returns the labels embeddings with the updated nearest neighbors."""
+        Returns the probe_dict with the updated nearest neighbors, distances, and the solution program associated
+        with that embedding if it exists.
+
+        closest_n: if None, returns all kNN. If int, adds only the top N (based on closeness to nearest neighbor.)
+        """
         from sklearn.neighbors import NearestNeighbors
         neighbors = NearestNeighbors(n_neighbors=6, algorithm='brute')
         labels = list(labels_embeddings.keys())
@@ -570,13 +574,32 @@ if __name__ == "__main__":
         labels, embeddings = np.array(labels), np.array(embeddings)
         neighbors.fit(embeddings)
 
+        # Calculate the KNN embeddings, distances, and frontiers if applicable.
         probe_labels = list(probe_dict.keys())
-        for label in probe_labels:
-            if key in probe_dict[label]:
-                k_neighbors = labels[neighbors.kneighbors(probe_dict[label][key].reshape(1, -1), return_distance=False)]
-                probe_dict[label]['kNN_%s_%s' % (key, title)] = list(k_neighbors.squeeze())
+        knn_results = {}
+        for probe_label in probe_labels:
+            if key in probe_dict[probe_label]:
+                knn_results[probe_label] = {}
+                neighbor_dists, neighbor_inds = neighbors.kneighbors(probe_dict[probe_label][key].reshape(1, -1), return_distance=True)
+                neighbor_labels, neighbor_dists = list(labels[neighbor_inds].squeeze()), list(neighbor_dists.squeeze())
+                neighbor_frontiers = [] # Task solutions associated with the queried embeddings.
+                for neighbor_label in neighbor_labels:
+                    if 'frontiers' in labels_embeddings[neighbor_label] and labels_embeddings[neighbor_label]['frontiers'] > 0:
+                        neighbor_frontiers.append(labels_embeddings[neighbor_label]['best_program'])
+                    else:
+                        neighbor_frontiers.append("")
+                knn_results[probe_label] = (neighbor_labels , neighbor_dists, neighbor_frontiers)
+
+        closest_n = closest_n if closest_n is not None else len(knn_results)
+        closest_n_probes = sorted(list(knn_results.keys()), key=lambda probe: knn_results[probe][1][0])[:closest_n] # Sort by nearest neighbor distance
+        
+        # Update the probe dict.
+        for label in closest_n_probes:
+            probe_dict[label]['kNN_%s_%s' % (key, title)] = knn_results[label]
         return probe_dict
 
+
+    ### Run the checkpoint analysis.
     if checkpoint_analysis is not None:
         # Load the checkpoint.
         print("Loading checkpoint ", checkpoint_analysis)
@@ -585,30 +608,41 @@ if __name__ == "__main__":
             recognitionModel = result.recognitionModel
 
         # Loads training and testing tasks, and marks them if they were solved.
-        trainingUtterances = {t.features : {'frontiers': 0} for t in allTrain}
+        trainingUtterances = {t.features : {'frontiers': 0, 'best_program' : ("", -1.0)} for t in allTrain}
         for t in result.allFrontiers:
             trainingUtterances[t.features]['frontiers'] += len(result.allFrontiers[t].entries)
+            # Add the best program for that task.
+            if not result.allFrontiers[t].empty:
+                bestEntry = result.allFrontiers[t].topK(1).entries[0]
+                if -bestEntry.logPosterior > trainingUtterances[t.features]['best_program'][1]:
+                    trainingUtterances[t.features]['best_program'] = (str(bestEntry.program), -bestEntry.logPosterior)
 
         unsolvedUtterances = {t : trainingUtterances[t] for t in trainingUtterances if trainingUtterances[t]['frontiers'] < 1}
         trainingUtterances = {t : trainingUtterances[t] for t in trainingUtterances if trainingUtterances[t]['frontiers'] > 0}
 
-        # Hand made analogies.
-        obj_strs = ['spade', 'heart', 'circle', 'heart', 'horse', 'house', 'rock', 'tree']
+        # Manual analogies to probe concept learning.
+        obj_strs = ['star', 'triangle', 'diamond', 'spade', 'heart', 'circle', 'heart', 'horse', 'house', 'rock', 'tree']
         ANALOGIES = []
         for obj1 in obj_strs:
             for obj2 in obj_strs:
                 if obj1 != obj2:
                     for direction in ['left of', 'right of', 'above', 'below']:
-                        ANALOGIES += [('reach the %s' % obj1, 'reach the cell %s the %s' % (direction, obj1), 'reach the %s' % obj2)]
+                        ANALOGIES += [('reach the %s' % obj1, 'reach %s the %s' % (direction, obj1), 'reach the %s' % obj2)]
                         ANALOGIES += [('reach %s the %s' % (direction, obj1), 'reach two %s the %s' % (direction, obj1), 'reach %s the %s' % (direction, obj2))] 
+                        for direction2 in ['left of', 'right of', 'above', 'below']:
+                            if direction != direction2:
+                                ANALOGIES += [('reach %s the %s' % (direction, obj1), 'reach %s the %s' % (direction2, obj1), 'reach %s the %s' % (direction, obj2))]
         manualAnalogyUtterances = {}
         for a, b, c in ANALOGIES:
             manualAnalogyUtterances[a], manualAnalogyUtterances[b], manualAnalogyUtterances[c] = {}, {}, {} 
+        for direction in ['left', 'right', 'above', 'below']:
+            manualAnalogyUtterances['reach %s' % direction] = {}
 
         lexiconEmbeddings = {token : {'counts' : 0} for token in result.recognitionModel.featureExtractor.lexicon}
+        directLexiconEmbeddings = {token : {'counts' : 0} for token in result.recognitionModel.featureExtractor.lexicon}
 
-        
-        for i, utteranceDict in enumerate([trainingUtterances, unsolvedUtterances, manualAnalogyUtterances]):
+        # Run the utterances through the checkpoint recognition model.
+        for i, utteranceDict in enumerate([trainingUtterances, unsolvedUtterances, manualAnalogyUtterances, directLexiconEmbeddings]):
             for u in utteranceDict:
                 try:
                     #### Utterance embeddings: full-sentence embeddings.
@@ -642,7 +676,7 @@ if __name__ == "__main__":
                 del lexiconEmbeddings[token]
             else:
                 for key in embedding_keys:
-                    lexiconEmbeddings[token][key] = (lexiconEmbeddings[token][key] / lexiconEmbeddings[token]['counts']) - averageEmbeddings[key]
+                    lexiconEmbeddings[token][key] = (lexiconEmbeddings[token][key] / lexiconEmbeddings[token]['counts']) # - averageEmbeddings[key]
                 
 
         # Analogy embeddings: randomly select analogies, but only keep around the best.
@@ -655,38 +689,84 @@ if __name__ == "__main__":
             for embedding_key in embedding_keys:
                 analogyDict["%s : %s" % (a, b)][embedding_key] = trainingUtterances[a][embedding_key] - trainingUtterances[b][embedding_key]
 
+        # Manual analogy embeddings: evaluate handwritten analogies. (e.g. 'go to heart' : 'go to left of heart' :: 'go to circle' : ??) 
         manualAnalogyDict = {"%s : %s :: %s : " % (a, b, c) : {'frontiers' : 0} for (a, b, c) in ANALOGIES} # Add dummy 'frontiers' variable for consistency.
         for analogy in ANALOGIES:
             a, b, c = analogy
             for embedding_key in embedding_keys:
                 manualAnalogyDict["%s : %s :: %s : " % (a, b, c)][embedding_key] = (manualAnalogyUtterances[b][embedding_key] - manualAnalogyUtterances[a][embedding_key]) + manualAnalogyUtterances[c][embedding_key]
 
+        # Manual task minus other task embeddings.
+        task_subtractions = []
+        for directionToken in ['left', 'right', 'above', 'below']:
+            for obj1 in obj_strs:
+                dir_string = directionToken if directionToken not in ['left', 'right'] else directionToken + " of"
+                task_subtractions.append(('reach %s the %s' % (dir_string, obj1), ('reach the %s' % obj1)))
+                task_subtractions.append(('reach %s the %s' % (dir_string, obj1), ('reach %s' % directionToken)))
+                #word_subtractions.append(('%s the %s' % (dir_string, obj1), directionToken))
+                #word_subtractions.append(('go %s the %s' % (dir_string, obj1), directionToken))
+        taskSubtractionDict = {"%s - %s" % (a, b) : {'frontiers' : 0} for (a, b) in task_subtractions}
+        for taskSubtraction in task_subtractions:
+            a, b = taskSubtraction
+            for embedding_key in embedding_keys:
+                taskSubtractionDict["%s - %s" % (a, b)][embedding_key] = manualAnalogyUtterances[a][embedding_key]  - manualAnalogyUtterances[b][embedding_key]
+
+        # Manual task minus lexicon embeddings.
+        word_subtractions = []
+        for directionToken in ['left', 'right', 'above', 'below']:
+            for obj1 in obj_strs:
+                dir_string = directionToken if directionToken not in ['left', 'right'] else directionToken + " of"
+                word_subtractions.append(('reach %s the %s' % (dir_string, obj1), directionToken))
+                #word_subtractions.append(('%s the %s' % (dir_string, obj1), directionToken))
+                #word_subtractions.append(('go %s the %s' % (dir_string, obj1), directionToken))
+                word_subtractions.append(('reach %s the %s' % (dir_string, obj1), obj1))
+                word_subtractions.append(('reach two %s the %s' % (dir_string, obj1), 'two'))
+                word_subtractions.append(('reach two %s the %s' % (dir_string, obj1), directionToken))
+                word_subtractions.append(('reach two %s the %s' % (dir_string, obj1), obj1))
+
+        wordSubtractionDict = {"%s - %s" % (a, b) : {'frontiers' : 0} for (a, b) in word_subtractions}
+        for wordSubtraction in word_subtractions:
+            a, b = wordSubtraction
+            for embedding_key in embedding_keys:
+                wordSubtractionDict["%s - %s" % (a, b)][embedding_key] = manualAnalogyUtterances[a][embedding_key]  - directLexiconEmbeddings[b][embedding_key]
+
+        
         # Calculate kNN utterances.
         for embedding_key in embedding_keys:
                 kNN(trainingUtterances, trainingUtterances, 'train', embedding_key)
                 kNN(unsolvedUtterances, trainingUtterances, 'train', embedding_key)
                 #kNN(analogyDict, trainingUtterances, 'train', embedding_key)
-                kNN(analogyDict, analogyDict, 'analogy', embedding_key, best_match=50)
-                kNN(manualAnalogyDict, trainingUtterances, 'train', embedding_key, best_match=50)
-                kNN(lexiconEmbeddings, lexiconEmbeddings, 'train', embedding_key)
+                #kNN(analogyDict, analogyDict, 'analogy', embedding_key)
+                kNN(manualAnalogyDict, trainingUtterances, 'train', embedding_key, closest_n=20)
+                kNN(lexiconEmbeddings, lexiconEmbeddings, 'train', embedding_key, closest_n=20)
+                kNN(taskSubtractionDict, trainingUtterances, 'train', embedding_key, closest_n=20)
+                kNN(wordSubtractionDict, trainingUtterances, 'train', embedding_key, closest_n=20)
 
-        for utteranceDict in trainingUtterances, unsolvedUtterances, analogyDict, manualAnalogyDict, lexiconEmbeddings:
+        for utteranceDict in trainingUtterances, unsolvedUtterances, analogyDict, lexiconEmbeddings, directLexiconEmbeddings, manualAnalogyDict, taskSubtractionDict, wordSubtractionDict: # removed: lexiconEmbeddings
             for utterance in utteranceDict:
-                if 'frontiers' in utteranceDict[utterance]:
-                    print("%s : %d frontiers" % (utterance.upper(), utteranceDict[utterance]['frontiers']))
+                # Check that we have anything to print first:
+                if all([not key.startswith('kNN') for key in utteranceDict[utterance].keys()]):
+                    continue
                 else:
-                    print("%s : %d frontiers" % (utterance.upper(), utteranceDict[utterance]['counts']))
-                for feature_key in list(utteranceDict[list(utteranceDict.keys())[0]].keys()):
-                    if feature_key.startswith('kNN') and feature_key in utteranceDict[utterance]:
-                        print(feature_key)
-                        print("\n\t".join(utteranceDict[utterance][feature_key]))
-                print("\n")
+                    if 'frontiers' in utteranceDict[utterance]:
+                        print("%s : %d frontiers" % (utterance.upper(), utteranceDict[utterance]['frontiers']))
+                    else:
+                        print("%s : %d frontiers" % (utterance.upper(), utteranceDict[utterance]['counts']))
+                    for feature_key in list(utteranceDict[utterance].keys()):
+                        if feature_key.startswith('kNN') and feature_key in utteranceDict[utterance]:
+                            print(feature_key)
+                            labels, distances, programs = utteranceDict[utterance][feature_key]
+                            print("\t\n".join(labels))
+                            print(programs[0])
+                    print("\n")
 
         for key in embedding_keys:
             plotTSNE(key, lexiconEmbeddings, key)
+            plotTSNE(key, directLexiconEmbeddings, key)
 
 
         assert False
+        #### Task-specific TSNE plots.
 
         # Get the recurrent feature extractor symbol embeddings.
         plotSymbolEmbeddings = False
