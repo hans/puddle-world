@@ -5,7 +5,7 @@
 from frozendict import frozendict
 import numpy as np
 
-from pyccg.logic import TypeSystem, Ontology, Expression
+from pyccg import logic as l
 
 SCENE_WIDTH = 10
 SCENE_HEIGHT = 10
@@ -60,7 +60,7 @@ def fn_exists(xs):
 
 
 def fn_pick(target):
-  if isinstance(target, frozendict): 
+  if isinstance(target, frozendict):
     return (target["row"], target["col"])
 
 
@@ -110,7 +110,7 @@ def fn_is_edge(obj):
 ## Build ontologies.
 def make_puddleworld_ontology(ontology_type='pyccg'):
   """
-  ontology_type: 
+  ontology_type:
     pyccg: includes all of the functions above, for pyccg.
     pyccg_model: includes an alternate unique function that only runs on models.
     default: extends the ontology with a Model-typed EC unique.
@@ -119,7 +119,7 @@ def make_puddleworld_ontology(ontology_type='pyccg'):
   # Add types.
   type_names = ["object", "boolean", "action", "direction", "int"]
   type_names.extend(['model']) # For EC enumeration on grounded scenes
-  types = TypeSystem(type_names)
+  types = l.TypeSystem(type_names)
 
   def make_obj_fn(obj):
     return lambda o: o["type"] == obj
@@ -136,7 +136,7 @@ def make_puddleworld_ontology(ontology_type='pyccg'):
   ]
   functions.extend([types.new_function(obj, ("object", "boolean"), make_obj_fn(obj))
                     for obj in obj_dict.values()])
-  
+
   if ontology_type != 'relate_n':
     functions.extend([types.new_function("relate", ("object", "object", "direction", "boolean"), fn_relate)])
 
@@ -162,7 +162,7 @@ def make_puddleworld_ontology(ontology_type='pyccg'):
     ])
   else:
     raise Exception("Invalid ontology type %s" % ontology_type)
-  return Ontology(types, functions, constants)
+  return l.Ontology(types, functions, constants)
 
 def process_scene(scene_objects):
   """
@@ -175,20 +175,64 @@ def process_scene(scene_objects):
   return {"objects": list(scene_objects.values())}
 
 
-def puddleworld_ec_translation_fn(raw_expr, is_pyccg_to_ec, ontology, namespace='_p', ec_fn_tag='ec'):
+STATEFUL_PREDICATES = ["unique"]
+
+def puddleworld_ec_pyccg_translation_fn(raw_expr, ontology, namespace='_p', ec_fn_tag='ec'):
     """
     Convenience translation function to remove Puddleworld namespacing before conversion
     to S-expr, or add it back.
     """
-    if is_pyccg_to_ec:
-        # Namespace all of the functions and constants
-        namespaced_strings = [function for function in ontology.functions_dict]
-        namespaced_strings += [str(constant) for constant in ontology.constants_dict]
-        for renameable in namespaced_strings:
-          raw_expr = raw_expr.replace(renameable, renameable+namespace)
-        return raw_expr
-    else:
-        return raw_expr.replace(namespace+" ", " ")
+    raw_expr = raw_expr.replace(namespace+" ", " ")
+    expr, _ = ontology.read_ec_sexpr(raw_expr, typecheck=False)
+
+    # Remove context variable and its spot in stateful predicates.
+    assert isinstance(expr, l.LambdaExpression)
+    world_variable, expr = expr.variable, expr.term
+    def visit(node):
+        if isinstance(node, l.ApplicationExpression):
+            if node.pred.variable.name in STATEFUL_PREDICATES:
+                node.remove_argument(0)
+            for i, arg in enumerate(node.args):
+                visit(arg)
+        elif isinstance(node, l.LambdaExpression):
+            visit(node.term)
+    visit(expr)
+
+    expr = expr.normalize()
+    ontology.typecheck(expr)
+    return expr
+
+
+def puddleworld_pyccg_ec_translation_fn(lf, ontology, namespace="_p", ec_fn_tag="ec"):
+    """
+    Convert puddleworld pyccg sentence-level meanings to EC sentence-level meanings.
+    """
+    # First handle stateful predicates. These are explicitly represented as
+    # extra first arguments in EC expressions.
+    world_variable = l.Variable("w")
+    # insert into any stateful predicates as first argument
+    def visit(node):
+        if isinstance(node, l.ApplicationExpression):
+            if node.pred.variable.name in STATEFUL_PREDICATES:
+                node.insert_argument(0, l.IndividualVariableExpression(world_variable))
+            for i, arg in enumerate(node.args):
+                visit(arg)
+        elif isinstance(node, l.LambdaExpression):
+            visit(node.term)
+
+    visit(lf)
+
+    lf = l.LambdaExpression(world_variable, lf)
+
+    ret_str = ontology.as_ec_sexpr(lf)
+
+    # Namespace all of the functions and constants
+    namespaced_strings = [function for function in ontology.functions_dict]
+    namespaced_strings += [str(constant) for constant in ontology.constants_dict]
+    for renameable in namespaced_strings:
+        ret_str = ret_str.replace(renameable, renameable+namespace)
+
+    return ret_str
 
 
 ####

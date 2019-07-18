@@ -19,7 +19,8 @@ from dreamcoder.ec import Task
 from dreamcoder.type import arrow
 import dreamcoder.program as ec_program
 
-from puddleworldOntology import make_puddleworld_ontology, process_scene
+from puddleworldOntology import make_puddleworld_ontology, process_scene, \
+    puddleworld_ec_pyccg_translation_fn, puddleworld_pyccg_ec_translation_fn
 from utils import ecTaskAsPyCCGUpdate, convertOntology
 
 ontology = make_puddleworld_ontology('pyccg')
@@ -211,7 +212,7 @@ def test_model_based_scene():
   expr = Expression.fromstring(r"\x. ec_unique(x, \y.diamond(y))")
   scene = process_scene([TINY_SCENE])
   model_object = frozendict(objects=tuple(scene['objects']), type='model')
-  wrapped_scene = {'objects' : [model_object]} 
+  wrapped_scene = {'objects' : [model_object]}
   expected = frozendict(row=2, col=9, type="diamond")
 
   model = Model(wrapped_scene, pyccg_model_ontology)
@@ -285,6 +286,40 @@ def test_ec_task_as_pyccg_scene():
   eq_(converted_instruction, instruction.split())
   eq_(converted_model.scene, scene)
   eq_(converted_goal, goal)
+
+def test_puddleworld_pyccg_ec_translation():
+  """
+  pyccg->EC ontology conversion should correctly manage special case predicate
+  `unique`
+  """
+  cases = [
+    (r"unique(\z1.horse(z1))", "(lambda (unique_p $0 (lambda (horse_p $0))))"),
+  ]
+
+  def _do_case(pyccg_lf_str, ec_lf_str):
+    pyccg_lf = Expression.fromstring(pyccg_lf_str)
+    ontology.typecheck(pyccg_lf)
+    eq_(puddleworld_pyccg_ec_translation_fn(pyccg_lf, ontology), ec_lf_str)
+
+  for pyccg_str, ec_str in cases:
+    yield _do_case, pyccg_str, ec_str
+
+
+def test_puddleworld_ec_pyccg_translation():
+  """
+  EC->pyccg ontology should conversion should correctly manage special case
+  predicate `unique`
+  """
+  cases = [
+    ("(lambda (unique_p $0 (lambda (horse_p $0))))", r"unique(\z1.horse(z1))"),
+  ]
+  def _do_case(ec_lf_str, pyccg_lf_str):
+    expr = puddleworld_ec_pyccg_translation_fn(ec_lf_str, ontology)
+    eq_(str(expr), pyccg_lf_str)
+
+  for ec_str, pyccg_str in cases:
+    yield _do_case, ec_str, pyccg_str
+
 
 def test_iter_expressions():
   """
