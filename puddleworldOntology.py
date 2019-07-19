@@ -283,8 +283,7 @@ def puddleworld_pyccg_ec_translation_fn(lf, ontology, namespace="_p", ec_fn_tag=
 
     ret_str = ontology.as_ec_sexpr(lf)
 
-    return ret_str
-    
+    return ret_str 
 
 ####
 # A tiny DSL for debugging purposes.

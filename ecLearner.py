@@ -87,6 +87,7 @@ class ECLanguageLearner:
     use_blind_enum: if True: to use blind enumeration on unsolved frontiers.
     word_reweighting: options to reweight the grammar based on the tasks seen so far.
     starting_grammar: the original grammar, which can be used for grammar reweighting to emphasize original primitives.
+    supervise_pyccg_with_inventions: if False, rewrites frontiers in beta normal form before update with supervision.
     """
     def __init__(self,
                 pyccg_learner,
@@ -95,13 +96,16 @@ class ECLanguageLearner:
                 use_pyccg_enum=False,
                 use_blind_enum=False,
                 word_reweighting=None,
-                starting_grammar=None):
+                starting_grammar=None,
+                supervise_pyccg_with_inventions=False):
 
                 self.pyccg_learner = pyccg_learner
                 self.pyccg2ec_translation = pyccg2ec_translation
                 self.ec2pyccg_translation = ec2pyccg_translation
                 self.use_pyccg_enum = use_pyccg_enum
                 self.use_blind_enum = use_blind_enum
+
+                self.supervise_pyccg_with_inventions = supervise_pyccg_with_inventions
 
                 self.word_reweighting = word_reweighting
                 self.starting_grammar = set(starting_grammar.primitives) # Names of all starting primitives.
@@ -227,10 +231,18 @@ class ECLanguageLearner:
         for frontier in frontiers:
             instruction, model, goal = ecTaskAsPyCCGUpdate(frontier.task, self.pyccg_learner.ontology)
             for entry in frontier.entries:
-                if self.ec2pyccg_translation:
-                    converted_pyccg = self.ec2pyccg_translation(str(entry.program), self.pyccg_learner.ontology)
+                ec_program = str(entry.program)
+                if not self.supervise_pyccg_with_inventions:
+                    ec_program = ec_program.betaNormalForm()
                 else:
-                    converted_pyccg = self.pyccg_learner.ontology.read_ec_sexpr(ec_expr)
+                    print("***** Unimplemented: supervision with inventions! ******")
+                    assert False 
+
+                ec_expr_str = str(ec_program)
+                if self.ec2pyccg_translation:
+                    converted_pyccg = self.ec2pyccg_translation(ec_expr_str, self.pyccg_learner.ontology)
+                else:
+                    converted_pyccg = self.pyccg_learner.ontology.read_ec_sexpr(ec_expr_str)
                 print("Updating PyCCG with supervised on %s " % str(converted_pyccg))
                 self.pyccg_learner.update_with_supervision(instruction, model, converted_pyccg)
 
@@ -347,6 +359,13 @@ def puddleworld_options(parser):
         dest="use_blind_enum",
         action="store_false",
         help='Whether to disable blind multicore enumeration to enumerate sentence parses.'
+        )
+    parser.add_argument(
+        "--supervise_pyccg_with_inventions",
+        dest='supervise_pyccg_with_inventions',
+        action="store_true",
+        default=False,
+        help="Whether to supervise PyCCG on inventions written in a compressed grammar.",
         )
     parser.add_argument(
         "--mlu_cap",
@@ -496,13 +515,16 @@ if __name__ == "__main__":
             pyccg_learner = WordLearner(None, max_expr_depth=max_expr_depth)
 
         word_reweighting = args.pop('word_reweighting')
+        supervise_pyccg_with_inventions = args.pop('supervise_pyccg_with_inventions')
+        print("Supervise PyCCG with inventions: %s" % str(supervise_pyccg_with_inventions))
         learner = ECLanguageLearner(pyccg_learner, 
             pyccg2ec_translation=puddleworld_pyccg_ec_translation_fn,
             ec2pyccg_translation=puddleworld_ec_pyccg_translation_fn,
             use_pyccg_enum=use_pyccg_enum,
             use_blind_enum=use_blind_enum,
             word_reweighting=word_reweighting,
-            starting_grammar=baseGrammar)
+            starting_grammar=baseGrammar,
+            supervise_pyccg_with_inventions=supervise_pyccg_with_inventions)
 
         # Initialize any task batchers for the curriculum.
         mlu_compress = args.pop('mlu_compress')
@@ -519,8 +541,6 @@ if __name__ == "__main__":
                                 custom_wake_generative=learner.wake_generative_with_pyccg,
                                 custom_task_batcher=batcher_fn,
                                 **args)
-
-    
 
 
     ###################################################################################################  

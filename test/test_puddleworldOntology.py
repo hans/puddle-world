@@ -345,4 +345,24 @@ def test_update_with_supervised():
   model = Model(scene, ontology)
   learner.update_with_supervision(sentence, learner, answer)
 
+def test_unwrapping_compressed_fragments():
+  # Test beta normal form to show that it is possible to update / that PyCCG can handle it.
+  complex_expr_str = '(lambda (#(lambda (lambda (lambda (lambda (#(lambda (lambda (move_p (ec_unique_p $0 $1)))) (lambda (relate_n_p $0 (ec_unique_p $1 (lambda ($5 $0))) $3 $2)) $0))))) (lambda (diamond_p $0)) left_p 1_p $0))'
+  scene = process_scene([SIMPLE_SCENE])
+
+  puddleworldTypes, puddleworldPrimitives = convertOntology(ec_ontology)
+
+  ec_prog = ec_program.Program.parse(complex_expr_str)
+  ec_value = ec_prog.runWithArguments([scene])
+  print("EC Observed:", ec_value)
+
+  unwrapped_ec_expr = str(ec_prog.betaNormalForm())
+  pyccg_expr = puddleworld_ec_pyccg_translation_fn(unwrapped_ec_expr, ontology)
+  print("Converted beta normal form: %s" % str(pyccg_expr))
+
+  model = Model(scene, ontology)
+  pyccg_value = model.evaluate(pyccg_expr)
+  print("PYCCG Observed:", pyccg_value)
+
+  eq_(pyccg_value, ec_value, msg=None)
 
