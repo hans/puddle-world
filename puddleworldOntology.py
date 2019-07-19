@@ -218,6 +218,7 @@ def puddleworld_ec_pyccg_translation_fn(raw_expr, ontology, namespace='_p', ec_f
     to S-expr, or add it back.
     """
     raw_expr = raw_expr.replace(namespace+" ", " ")
+    raw_expr = raw_expr.replace(namespace+")", ")")
     raw_expr = raw_expr.replace(ec_fn_tag, "")
     expr, _ = ontology.read_ec_sexpr(raw_expr, typecheck=False)
 
@@ -247,10 +248,30 @@ def puddleworld_pyccg_ec_translation_fn(lf, ontology, namespace="_p", ec_fn_tag=
     # extra first arguments in EC expressions.
     world_variable = l.Variable("w")
     # insert into any stateful predicates as first argument
+
+    namespaced_strings = [str(function) for function in ontology.functions_dict]
+    namespaced_strings += [str(constant) for constant in ontology.constants_dict]
+
+    def rename_ec_namespace(name):
+      namespaced_strings = [str(function) for function in ontology.functions_dict]
+      namespaced_strings += [str(constant) for constant in ontology.constants_dict]
+      orig_name = name 
+
+      if orig_name in namespaced_strings:
+        name += namespace
+      if orig_name in STATEFUL_PREDICATES:
+        name = ec_fn_tag + name
+      return name
+
     def visit(node):
+        if isinstance(node, l.ConstantExpression):
+          node.variable.name = rename_ec_namespace(node.variable.name)
         if isinstance(node, l.ApplicationExpression):
+            # Insert first argument.
             if node.pred.variable.name in STATEFUL_PREDICATES:
                 node.insert_argument(0, l.IndividualVariableExpression(world_variable))
+            # Namespacing.
+            node.pred.variable.name = rename_ec_namespace(node.pred.variable.name)
             for i, arg in enumerate(node.args):
                 visit(arg)
         elif isinstance(node, l.LambdaExpression):
@@ -261,16 +282,6 @@ def puddleworld_pyccg_ec_translation_fn(lf, ontology, namespace="_p", ec_fn_tag=
     lf = l.LambdaExpression(world_variable, lf)
 
     ret_str = ontology.as_ec_sexpr(lf)
-
-    # Namespace all of the functions and constants
-    namespaced_strings = [str(function) for function in ontology.functions_dict]
-    namespaced_strings += [str(constant) for constant in ontology.constants_dict]
-    for renameable in namespaced_strings:
-      ret_str = ret_str.replace(" " + renameable, " " + renameable+namespace)
-      ret_str = ret_str.replace("(" + renameable, "(" + renameable+namespace) # Prevent replacing numerical constants
-    
-    for stateful in STATEFUL_PREDICATES:
-      ret_str = ret_str.replace(stateful, ec_fn_tag+stateful)
 
     return ret_str
     

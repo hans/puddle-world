@@ -294,6 +294,7 @@ def test_puddleworld_pyccg_ec_translation():
   """
   cases = [
     (r"unique(\z1.horse(z1))", "(lambda (ec_unique_p $0 (lambda (horse_p $0))))"),
+    (r"relate_n(unique(\x.star(x)),unique(\x.rock(x)),right,1)", "(lambda (relate_n_p (ec_unique_p $0 (lambda (star_p $0))) (ec_unique_p $0 (lambda (rock_p $0))) right_p 1_p))")
   ]
 
   def _do_case(pyccg_lf_str, ec_lf_str):
@@ -314,6 +315,7 @@ def test_puddleworld_ec_pyccg_translation():
   """
   cases = [
     ("(lambda (ec_unique_p $0 (lambda (horse_p $0))))", r"unique(\z1.horse(z1))"),
+    ("(lambda (relate_n_p (ec_unique_p $0 (lambda (star_p $0))) (ec_unique_p $0 (lambda (rock_p $0))) right_p 1_p))", r"relate_n(unique(\z1.star(z1)),unique(\z2.rock(z2)),right,1)")
   ]
   def _do_case(ec_lf_str, pyccg_lf_str):
     expr = puddleworld_ec_pyccg_translation_fn(ec_lf_str, ontology)
