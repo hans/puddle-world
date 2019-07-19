@@ -163,8 +163,8 @@ def make_puddleworld_ontology(ontology_type='pyccg'):
 ### Make initial lexicon
 SEED_PUDDLEWORLD_LEX = Lexicon.fromstring(r"""
   :- S:N
-  # reach => S/N {\x.move(x)}
-  # reach => S/N {\x.move(unique(x))}
+  reach => S/N {\x.move(x)}
+  reach => S/N {\x.move(unique(x))}
   below => S/N {\x.move(unique(\y.relate(y,x,down)))}
   above => S/N {\x.move(unique(\y.relate(y,x,up)))}
 
@@ -195,7 +195,7 @@ SEED_PUDDLEWORLD_LEX = Lexicon.fromstring(r"""
   spade => N {unique(\x.spade(x))}
   heart => N {\x.heart(x)}
   heart => N {unique(\x.heart(x))}
-  # circle => N {\x.circle(x)}
+  circle => N {\x.circle(x)}
   triangle => N {\x.triangle(x)}
 """, make_puddleworld_ontology(ontology_type='pyccg'), include_semantics=True)
 

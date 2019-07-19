@@ -14,6 +14,7 @@ import numpy as np
 
 from pyccg.logic import Expression
 from pyccg.model import Model
+from pyccg.word_learner import *
 
 from dreamcoder.ec import Task
 from dreamcoder.type import arrow
@@ -332,3 +333,16 @@ def test_iter_expressions():
   exprs = ontology.iter_expressions(type_request=ontology.types["object", "object", "action"], max_depth=6)
   exprs = set(str(x) for x in exprs)
   ok_(r"\z2 z1.move(unique(\z3.relate(z3,z2,z1)))" in exprs)
+
+def test_update_with_supervised():
+  from puddleworldOntology import SEED_PUDDLEWORLD_LEX
+
+  answer = Expression.fromstring(r'move(unique(\z1.diamond(z1)))')
+  sentence = "go to diamond".split()
+  scene = process_scene([SIMPLE_SCENE])
+
+  learner = WordLearner(SEED_PUDDLEWORLD_LEX)
+  model = Model(scene, ontology)
+  learner.update_with_supervision(sentence, learner, answer)
+
+

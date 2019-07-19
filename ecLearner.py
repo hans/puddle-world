@@ -179,6 +179,7 @@ class ECLanguageLearner:
         instruction, model, goal = update
         def update_in_timeout(instruction, model, goal, return_dict):
             return_dict['results'] = []
+            return_dict['pyccg_learner'] = None
             return_dict['results'] = self.pyccg_learner.update_with_distant(instruction, model, goal)
             return_dict['pyccg_learner'] = dill.dumps(self.pyccg_learner) # Dump entire learner to persist state outside Process.
         
@@ -192,8 +193,13 @@ class ECLanguageLearner:
             p.terminate()
             p.join()
 
-        self.pyccg_learner = dill.loads(return_dict['pyccg_learner']) # Replace entire learner with updated one.
-
+        try:
+            updated_learner =  dill.loads(return_dict['pyccg_learner'])
+        except:
+            # If we cannot replace an updated learner, don't use any results.
+            return []
+        
+        self.pyccg_learner = updated_learner # Replace entire learner with updated one.
         weighted_meanings = []
         results = return_dict['results']
         if results and len(results) > 0:
