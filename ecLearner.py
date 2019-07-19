@@ -173,13 +173,14 @@ class ECLanguageLearner:
         Wraps PyCCG update with distant in a timeout.
         Returns: list of (S-expression semantics, logProb) tuples found for the sentence within the timeout.
         """
-        import multiprocessing
+        import multiprocessing # We need multiprocessing to handle timeouts gracefully.
+        import dill
         
         instruction, model, goal = update
         def update_in_timeout(instruction, model, goal, return_dict):
             return_dict['results'] = []
             return_dict['results'] = self.pyccg_learner.update_with_distant(instruction, model, goal)
-
+            return_dict['pyccg_learner'] = dill.dumps(self.pyccg_learner) # Dump entire learner to persist state outside Process.
         
         manager = multiprocessing.Manager()
         return_dict = manager.dict()
@@ -191,6 +192,8 @@ class ECLanguageLearner:
             p.terminate()
             p.join()
 
+        self.pyccg_learner = dill.loads(return_dict['pyccg_learner']) # Replace entire learner with updated one.
+
         weighted_meanings = []
         results = return_dict['results']
         if results and len(results) > 0:
@@ -200,7 +203,6 @@ class ECLanguageLearner:
                 meaning = root_token.semantics()
                 weighted_meanings.append((meaning, log_probability))
         return weighted_meanings
-
 
     def _update_pyccg_with_distant_batch(self, tasks, timeout):
         """
@@ -315,8 +317,6 @@ class ECLanguageLearner:
 
         # Update PyCCG model with fallback discovered frontiers.
         if self.use_pyccg_enum: self._update_pyccg_with_supervised_batch(fallback_frontiers) 
-
-        assert False
 
         # Convert and consolidate PyCCG meanings and fallback frontiers for handoff to EC.
         
