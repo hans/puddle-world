@@ -6,6 +6,7 @@ from frozendict import frozendict
 import numpy as np
 
 from pyccg import logic as l
+from pyccg.lexicon import Lexicon
 
 SCENE_WIDTH = 10
 SCENE_HEIGHT = 10
@@ -32,16 +33,11 @@ def ec_fn_tmodel_evaluate(model, expr):
     try:
       val = expr(u)
     except Exception as e:
-      print(e)
       val = False
     cf[u] = val
   return cf
 
 def ec_fn_unique(model, expr):
-  print('MODEL')
-  print(model.keys())
-  print("EXPRESSION")
-  print(expr)
   cf = ec_fn_tmodel_evaluate(model, expr)
   return fn_unique(cf)
 
@@ -164,6 +160,45 @@ def make_puddleworld_ontology(ontology_type='pyccg'):
     raise Exception("Invalid ontology type %s" % ontology_type)
   return l.Ontology(types, functions, constants)
 
+### Make initial lexicon
+SEED_PUDDLEWORLD_LEX = Lexicon.fromstring(r"""
+  :- S:N
+  # reach => S/N {\x.move(x)}
+  # reach => S/N {\x.move(unique(x))}
+  below => S/N {\x.move(unique(\y.relate(y,x,down)))}
+  above => S/N {\x.move(unique(\y.relate(y,x,up)))}
+
+  , => S\S/S {\a b.a}
+  , => S\S/S {\a b.b}
+  
+  of => N\N/N {\x d y.relate(x,y,d)}
+  of => N\N/N {\x d y.relate(unique(x),d,y)}
+  to => N\N/N {\x y.x}
+
+  one => S/N/N {\d x.move(unique(\y.relate(y,x,d)))}
+  one => S/N/N {\d x.move(unique(\y.relate_n(y,x,d,1)))}
+  right => N/N {\f x.and_(apply(f, x),in_half(x,right))}
+
+  most => N\N/N {\x d.max_in_dir(x, d)}
+
+  the => N/N {\x.unique(x)}
+
+  left => N {left}
+  below => N {down}
+  above => N {up}
+  right => N {right}
+  horse => N {\x.horse(x)}
+  rock => N {\x.rock(x)}
+  rock => N {unique(\x.rock(x))}
+  cell => N {\x.true}
+  spade => N {\x.spade(x)}
+  spade => N {unique(\x.spade(x))}
+  heart => N {\x.heart(x)}
+  heart => N {unique(\x.heart(x))}
+  # circle => N {\x.circle(x)}
+  triangle => N {\x.triangle(x)}
+""", make_puddleworld_ontology(ontology_type='pyccg'), include_semantics=True)
+
 def process_scene(scene_objects):
   """
   Convert puddle-world object array into a representation compatible with this
@@ -177,12 +212,13 @@ def process_scene(scene_objects):
 
 STATEFUL_PREDICATES = ["unique"]
 
-def puddleworld_ec_pyccg_translation_fn(raw_expr, ontology, namespace='_p', ec_fn_tag='ec'):
+def puddleworld_ec_pyccg_translation_fn(raw_expr, ontology, namespace='_p', ec_fn_tag='ec_'):
     """
     Convenience translation function to remove Puddleworld namespacing before conversion
     to S-expr, or add it back.
     """
     raw_expr = raw_expr.replace(namespace+" ", " ")
+    raw_expr = raw_expr.replace(ec_fn_tag, "")
     expr, _ = ontology.read_ec_sexpr(raw_expr, typecheck=False)
 
     # Remove context variable and its spot in stateful predicates.
@@ -203,7 +239,7 @@ def puddleworld_ec_pyccg_translation_fn(raw_expr, ontology, namespace='_p', ec_f
     return expr
 
 
-def puddleworld_pyccg_ec_translation_fn(lf, ontology, namespace="_p", ec_fn_tag="ec"):
+def puddleworld_pyccg_ec_translation_fn(lf, ontology, namespace="_p", ec_fn_tag="ec_"):
     """
     Convert puddleworld pyccg sentence-level meanings to EC sentence-level meanings.
     """
@@ -227,13 +263,17 @@ def puddleworld_pyccg_ec_translation_fn(lf, ontology, namespace="_p", ec_fn_tag=
     ret_str = ontology.as_ec_sexpr(lf)
 
     # Namespace all of the functions and constants
-    namespaced_strings = [function for function in ontology.functions_dict]
+    namespaced_strings = [str(function) for function in ontology.functions_dict]
     namespaced_strings += [str(constant) for constant in ontology.constants_dict]
     for renameable in namespaced_strings:
-        ret_str = ret_str.replace(renameable, renameable+namespace)
+      ret_str = ret_str.replace(" " + renameable, " " + renameable+namespace)
+      ret_str = ret_str.replace("(" + renameable, "(" + renameable+namespace) # Prevent replacing numerical constants
+    
+    for stateful in STATEFUL_PREDICATES:
+      ret_str = ret_str.replace(stateful, ec_fn_tag+stateful)
 
     return ret_str
-
+    
 
 ####
 # A tiny DSL for debugging purposes.

@@ -31,7 +31,7 @@ from dreamcoder.task import *
 from pyccg.lexicon import Lexicon
 from pyccg.word_learner import WordLearner
 
-from puddleworldOntology import make_puddleworld_ontology, process_scene, puddleworld_ec_translation_fn
+from puddleworldOntology import make_puddleworld_ontology, process_scene, puddleworld_ec_pyccg_translation_fn, puddleworld_pyccg_ec_translation_fn, SEED_PUDDLEWORLD_LEX
 from puddleworldTasks import *
 from utils import convertOntology, ecTaskAsPyCCGUpdate, filter_tasks_mlu, MLUTaskBatcher
 
@@ -77,51 +77,12 @@ class InstructionsFeatureExtractor(RecurrentFeatureExtractor):
                                                             bidirectional=True,
                                                             cuda=cuda)
 
-### PyCCG Word Learner
-initial_puddleworld_lex = Lexicon.fromstring(r"""
-  :- S:N
-
-  reach => S/N {\x.move(x)}
-  reach => S/N {\x.move(unique(x))}
-  # below => S/N {\x.move(unique(\y.relate(y,x,down)))}
-  # above => S/N {\x.move(unique(\y.relate(y,x,up)))}
-
-  , => S\S/S {\a b.a}
-  , => S\S/S {\a b.b}
-  
-  # of => N\N/N {\x d y.relate(x,y,d)}
-  # of => N\N/N {\x d y.relate(unique(x),d,y)}
-  to => N\N/N {\x y.x}
-
-  # one => S/N/N {\d x.move(unique(\y.relate(y,x,d)))}
-  # one => S/N/N {\d x.move(unique(\y.relate_n(y,x,d,1)))}
-  right => N/N {\f x.and_(apply(f, x),in_half(x,right))}
-
-  # most => N\N/N {\x d.max_in_dir(x, d)}
-
-  # the => N/N {\x.unique(x)}
-
-  # left => N {left}
-  # below => N {down}
-  # above => N {up}
-  # right => N {right}
-  # horse => N {\x.horse(x)}
-  # rock => N {\x.rock(x)}
-  # rock => N {unique(\x.rock(x))}
-  # cell => N {\x.true}
-  # spade => N {\x.spade(x)}
-  # spade => N {unique(\x.spade(x))}
-  # heart => N {\x.heart(x)}
-  # heart => N {unique(\x.heart(x))}
-  # circle => N {\x.circle(x)}
-  # triangle => N {\x.triangle(x)}
-""", make_puddleworld_ontology(ontology_type='pyccg'), include_semantics=True)
-
 class ECLanguageLearner:
     """
     ECLanguageLearner: driver class that manages learning between PyCCG and EC.
 
-    ec_ontology_translation_fn: runs on the EC/PyCCG program strings if there are any ontology renaming conversions.
+    pyccg2ec_translation: convert PyCCG expressions to EC if there are any ontology/namespacing differences.
+    ec2pyccg_translation: convert EC expressions to PyCCG if there are any ontology/namespacing differences.
     use_pyccg_enum: if True: use PyCCG parsing to discover sentence frontiers.
     use_blind_enum: if True: to use blind enumeration on unsolved frontiers.
     word_reweighting: options to reweight the grammar based on the tasks seen so far.
@@ -129,14 +90,16 @@ class ECLanguageLearner:
     """
     def __init__(self,
                 pyccg_learner,
-                ec_ontology_translation_fn=None,
+                pyccg2ec_translation=None,
+                ec2pyccg_translation=None,
                 use_pyccg_enum=False,
                 use_blind_enum=False,
                 word_reweighting=None,
                 starting_grammar=None):
 
                 self.pyccg_learner = pyccg_learner
-                self.ec_ontology_translation_fn = ec_ontology_translation_fn
+                self.pyccg2ec_translation = pyccg2ec_translation
+                self.ec2pyccg_translation = ec2pyccg_translation
                 self.use_pyccg_enum = use_pyccg_enum
                 self.use_blind_enum = use_blind_enum
 
@@ -210,22 +173,26 @@ class ECLanguageLearner:
         Wraps PyCCG update with distant in a timeout.
         Returns: list of (S-expression semantics, logProb) tuples found for the sentence within the timeout.
         """
-        import signal
-        def timeout_handler(signum, frame):
-            raise Exception("PyCCG enumeration timeout.")
+        import multiprocessing
+        
+        instruction, model, goal = update
+        def update_in_timeout(instruction, model, goal, return_dict):
+            return_dict['results'] = []
+            return_dict['results'] = self.pyccg_learner.update_with_distant(instruction, model, goal)
 
-        results = None
-        try:
-            signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(timeout) # Start the stopwatch.
-            instruction, model, goal = update
-            results = self.pyccg_learner.update_with_distant(instruction, model, goal)
-            signal.alarm(0) # Disable the stopwatch.
-        except Exception:
+        
+        manager = multiprocessing.Manager()
+        return_dict = manager.dict()
+        p = multiprocessing.Process(target=update_in_timeout, args=(instruction, model, goal, return_dict))
+        p.start()
+        p.join(timeout)
+        if p.is_alive():
             print("Timeout for t=%d on: %s" % (timeout, instruction))
-            pass
+            p.terminate()
+            p.join()
 
         weighted_meanings = []
+        results = return_dict['results']
         if results and len(results) > 0:
             for result in results:
                 log_probability = result[1]
@@ -252,25 +219,27 @@ class ECLanguageLearner:
         for frontier in frontiers:
             instruction, model, goal = ecTaskAsPyCCGUpdate(frontier.task, self.pyccg_learner.ontology)
             for entry in frontier.entries:
-                if self.ec_ontology_translation_fn:
-                    ec_expr = str(entry.program) if self.ec_ontology_translation_fn is None else self.ec_ontology_translation_fn(str(entry.program), is_pyccg_to_ec=False)
-                converted = self.pyccg_learner.ontology.read_ec_sexpr(ec_expr)
-                # TODO (catwong, jgauthier): no update with supervised.
-                print("****ALERT: NOT YET IMPLEMENTED FULLY: NO PYCCG UDPATE WITH SUPERVISED *****")
+                if self.ec2pyccg_translation:
+                    converted_pyccg = self.ec2pyccg_translation(str(entry.program), self.pyccg_learner.ontology)
+                else:
+                    converted_pyccg = self.pyccg_learner.ontology.read_ec_sexpr(ec_expr)
+                print("Updating PyCCG with supervised on %s " % str(converted_pyccg))
+                self.pyccg_learner.update_with_supervision(instruction, model, converted_pyccg)
 
     def _pyccg_meanings_to_ec_frontiers(self, pyccg_meanings):
         """
         Ret:
-            pyccg_frontiers: dict from task -> Dreamcoder frontiers.
+            pyccg_frontiers: dict from task -> Dreamcoder frontiers for tasks solved by PyCCG.
         """
         pyccg_frontiers = {}
         for task in pyccg_meanings:
             if len(pyccg_meanings[task]) > 0:
                 frontier_entries = []
                 for (meaning, log_prob) in pyccg_meanings[task]:
-                    ec_sexpr = self.pyccg_learner.ontology.as_ec_sexpr(meaning)
-                    if self.ec_ontology_translation_fn:
-                        ec_sexpr = self.ec_ontology_translation_fn(ec_sexpr, is_pyccg_to_ec=True)
+                    if self.pyccg2ec_translation:
+                        ec_sexpr = self.pyccg2ec_translation(meaning, self.pyccg_learner.ontology)
+                    else:
+                        ec_sexpr = self.pyccg_learner.ontology.as_ec_sexpr(meaning)
 
                     # Uses the p=1.0 likelihood for programs that solve the task.
                     frontier_entry = FrontierEntry(
@@ -334,22 +303,22 @@ class ECLanguageLearner:
                                                            CPUs=CPUs,
                                                            solver=solver,
                                                            evaluationTimeout=evaluationTimeout)
+        
+        # Convert to EC frontiers.
+        pyccg_frontiers = self._pyccg_meanings_to_ec_frontiers(pyccg_meanings)
 
         # Log enumeration results.
         print("PyCCG model parsing results")
-        if self.use_pyccg_enum: self._describe_pyccg_results(pyccg_meanings)
+        if self.use_pyccg_enum: print(Frontier.describe(pyccg_frontiers.values()))
         print("Non-language generative model enumeration results:")
         print(Frontier.describe(fallback_frontiers))
 
         # Update PyCCG model with fallback discovered frontiers.
-        if self.use_pyccg_enum: self._update_pyccg_with_supervised_batch(fallback_frontiers) # TODO(catwong, jgauthier): does not yet update.
+        if self.use_pyccg_enum: self._update_pyccg_with_supervised_batch(fallback_frontiers) 
+
+        assert False
 
         # Convert and consolidate PyCCG meanings and fallback frontiers for handoff to EC.
-        if not self.use_blind_enum:
-            print("****ALERT: SKIPPING PYCCG MEANING CONVERSION DUE TO ONTOLOGY MISMATCH *****") # TODO (catwong)
-            pyccg_frontiers = {t : Frontier([], t) for t in tasks}
-        else:
-            pyccg_frontiers = self._pyccg_meanings_to_ec_frontiers(pyccg_meanings)
         
         fallback_frontiers = {frontier.task : frontier for frontier in fallback_frontiers}
         all_frontiers = {t : pyccg_frontiers[t] if t in pyccg_frontiers else fallback_frontiers[t] for t in tasks}
@@ -378,6 +347,12 @@ def puddleworld_options(parser):
         default=None,
         type=int,
         help='If provided, cap tasks by MLU.'
+        )
+    parser.add_argument(
+        "--max_expr_depth",
+        default=None,
+        type=int,
+        help='Max expression depth for PyCCG.'
         )
     parser.add_argument(
         "--mlu_compress",
@@ -506,16 +481,18 @@ if __name__ == "__main__":
         logger = logging.getLogger()
         logger.disabled = True
 
-        max_expr_depth = mlu_cap if mlu_cap is not None else PYCCG_MAX_EXPR_DEPTH
+        max_expr_depth = args.pop('max_expr_depth')
+        max_expr_depth = max_expr_depth if max_expr_depth is not None else PYCCG_MAX_EXPR_DEPTH
         if args.pop('use_initial_lexicon'):
             print("Using initial lexicon for Puddleworld PyCCG learner.")
-            pyccg_learner = WordLearner(initial_puddleworld_lex, max_expr_depth=max_expr_depth)
+            pyccg_learner = WordLearner(SEED_PUDDLEWORLD_LEX, max_expr_depth=max_expr_depth)
         else:
             pyccg_learner = WordLearner(None, max_expr_depth=max_expr_depth)
 
         word_reweighting = args.pop('word_reweighting')
         learner = ECLanguageLearner(pyccg_learner, 
-            ec_ontology_translation_fn=puddleworld_ec_translation_fn,
+            pyccg2ec_translation=puddleworld_pyccg_ec_translation_fn,
+            ec2pyccg_translation=puddleworld_ec_pyccg_translation_fn,
             use_pyccg_enum=use_pyccg_enum,
             use_blind_enum=use_blind_enum,
             word_reweighting=word_reweighting,

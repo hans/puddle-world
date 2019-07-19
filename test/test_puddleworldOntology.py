@@ -293,13 +293,15 @@ def test_puddleworld_pyccg_ec_translation():
   `unique`
   """
   cases = [
-    (r"unique(\z1.horse(z1))", "(lambda (unique_p $0 (lambda (horse_p $0))))"),
+    (r"unique(\z1.horse(z1))", "(lambda (ec_unique_p $0 (lambda (horse_p $0))))"),
   ]
 
   def _do_case(pyccg_lf_str, ec_lf_str):
     pyccg_lf = Expression.fromstring(pyccg_lf_str)
     ontology.typecheck(pyccg_lf)
-    eq_(puddleworld_pyccg_ec_translation_fn(pyccg_lf, ontology), ec_lf_str)
+    converted_pyccg = puddleworld_pyccg_ec_translation_fn(pyccg_lf, ontology)
+    print("Converted %s->%s" % (pyccg_lf_str, converted_pyccg))
+    eq_(converted_pyccg, ec_lf_str)
 
   for pyccg_str, ec_str in cases:
     yield _do_case, pyccg_str, ec_str
@@ -311,7 +313,7 @@ def test_puddleworld_ec_pyccg_translation():
   predicate `unique`
   """
   cases = [
-    ("(lambda (unique_p $0 (lambda (horse_p $0))))", r"unique(\z1.horse(z1))"),
+    ("(lambda (ec_unique_p $0 (lambda (horse_p $0))))", r"unique(\z1.horse(z1))"),
   ]
   def _do_case(ec_lf_str, pyccg_lf_str):
     expr = puddleworld_ec_pyccg_translation_fn(ec_lf_str, ontology)
