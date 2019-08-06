@@ -338,12 +338,15 @@ def test_update_with_supervised():
   from puddleworldOntology import SEED_PUDDLEWORLD_LEX
 
   answer = Expression.fromstring(r'move(unique(\z1.diamond(z1)))')
-  sentence = "go to diamond".split()
+  sentence = "reach diamond".split()
   scene = process_scene([SIMPLE_SCENE])
 
   learner = WordLearner(SEED_PUDDLEWORLD_LEX)
   model = Model(scene, ontology)
   learner.update_with_supervision(sentence, learner, answer)
+
+  diamond_entries = learner.lexicon.get_entries("diamond")
+  ok_(len(diamond_entries) > 0, "Should induce entries for 'diamond'")
 
 def test_unwrapping_compressed_fragments():
   # Test beta normal form to show that it is possible to update / that PyCCG can handle it.
