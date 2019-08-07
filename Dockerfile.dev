@@ -1,0 +1,23 @@
+FROM continuumio/anaconda3
+
+RUN mkdir -p /opt/puddle
+WORKDIR /opt/puddle
+
+# Download dependencies.
+ENV PATH "/opt/conda/bin:${PATH}"
+RUN conda install -y nltk=3.4 nose coverage tqdm dill && conda clean --all -y
+RUN conda install -c pytorch pytorch torchvision cudatoolkit=9.0
+RUN pip install rednose frozendict
+ENV NOSE_REDNOSE 1
+
+# Download pregex.
+RUN mkdir pregex && cd pregex && git clone https://github.com/insperatum/pregex && cd -
+ENV PYTHONPATH "/opt/puddle/pregex:${PYTHONPATH}"
+
+# Download EC.
+RUN git clone https://github.com/ellisk42/ec
+ENV PYTHONPATH "/opt/puddle/ec:${PYTHONPATH}"
+
+# Download pyccg.
+RUN git clone https://github.com/hans/pyccg
+ENV PYTHONPATH "/opt/puddle/pyccg:${PYTHONPATH}"
