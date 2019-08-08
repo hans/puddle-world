@@ -567,12 +567,14 @@ if __name__ == "__main__":
         closest_n: if None, returns all kNN. If int, adds only the top N (based on closeness to nearest neighbor.)
         """
         from sklearn.neighbors import NearestNeighbors
+        lookup_key = key.split('*')[0] # Sometimes we want to look up a key but append a separate tag indicating the transformation.
         neighbors = NearestNeighbors(n_neighbors=6, algorithm='brute')
         labels = list(labels_embeddings.keys())
-        embeddings = [labels_embeddings[label][key] for label in labels]
+        embeddings = [labels_embeddings[label][lookup_key] for label in labels]
         print("kNN over %d embeddings of shape: %s" % (len(embeddings), str(embeddings[0].shape)))
         labels, embeddings = np.array(labels), np.array(embeddings)
         neighbors.fit(embeddings)
+
 
         # Calculate the KNN embeddings, distances, and frontiers if applicable.
         probe_labels = list(probe_dict.keys())
@@ -598,6 +600,30 @@ if __name__ == "__main__":
             probe_dict[label]['kNN_%s_%s' % (key, title)] = knn_results[label]
         return probe_dict
 
+    def get_feature_delta_embeddings(sentence, result, baseFeatures, baseTransitionMatrix, skippedEmbeddings):
+        """Calculates the delta contributed to the feature extractor by each token in an utterance, in context.
+        Assumes a bidirectional GRU (RecurrentFeatureExtractor) as the LSTM.
+        """
+        print(sentence)
+        tokens = result.recognitionModel.featureExtractor.tokenize(sentence)[0][0][0]
+        for i in range(len(tokens)):
+            skipped_token = tokens[i]
+            skipped_word_sentence = " ".join(tokens[:i]+tokens[i+1:])
+            print(skipped_word_sentence)
+            skipped_features = result.recognitionModel.featureExtractor.forward(skipped_word_sentence)
+            features = result.recognitionModel._MLP(skipped_features)
+            skipped_transition = result.recognitionModel.grammarBuilder.transitionMatrix(features).view(-1).data.cpu().numpy()
+            skipped_features = skipped_features.data.cpu().numpy()
+
+            feature_delta, transition_delta = baseFeatures - skipped_features, baseTransitionMatrix - skipped_transition
+                
+            skippedEmbeddings[token]['counts'] += 1
+            for embedding_key, embedding in (('embed_feature_extractor', feature_delta), ('embed_contextual_transition_matrix', transition_delta)):
+                if embedding_key not in skippedEmbeddings[token]:
+                    skippedEmbeddings[token][embedding_key] = embedding
+                else:
+                    skippedEmbeddings[token][embedding_key] += embedding
+        return skippedEmbeddings
 
     ### Run the checkpoint analysis.
     if checkpoint_analysis is not None:
@@ -616,7 +642,6 @@ if __name__ == "__main__":
                 bestEntry = result.allFrontiers[t].topK(1).entries[0]
                 if -bestEntry.logPosterior > trainingUtterances[t.features]['best_program'][1]:
                     trainingUtterances[t.features]['best_program'] = (str(bestEntry.program), -bestEntry.logPosterior)
-
         unsolvedUtterances = {t : trainingUtterances[t] for t in trainingUtterances if trainingUtterances[t]['frontiers'] < 1}
         trainingUtterances = {t : trainingUtterances[t] for t in trainingUtterances if trainingUtterances[t]['frontiers'] > 0}
 
@@ -639,12 +664,14 @@ if __name__ == "__main__":
             manualAnalogyUtterances['reach %s' % direction] = {}
 
         lexiconEmbeddings = {token : {'counts' : 0} for token in result.recognitionModel.featureExtractor.lexicon}
+        skippedTokenEmbeddings = {token : {'counts' : 0} for token in result.recognitionModel.featureExtractor.lexicon}
         directLexiconEmbeddings = {token : {'counts' : 0} for token in result.recognitionModel.featureExtractor.lexicon}
 
         # Run the utterances through the checkpoint recognition model.
         for i, utteranceDict in enumerate([trainingUtterances, unsolvedUtterances, manualAnalogyUtterances, directLexiconEmbeddings]):
             for u in utteranceDict:
                 try:
+
                     #### Utterance embeddings: full-sentence embeddings.
                     features_of_task = result.recognitionModel.featureExtractor.forward(u)
                     # Feature extractor utterance embeddings. Outputs directly from the feature extractor that are passed to 
@@ -654,17 +681,21 @@ if __name__ == "__main__":
                     features = result.recognitionModel._MLP(features_of_task)
                     utteranceDict[u]['embed_contextual_transition_matrix'] = result.recognitionModel.grammarBuilder.transitionMatrix(features).view(-1).data.cpu().numpy()
                 
-                    #### Calculate the token-specific embeddings.
-                    for token in result.recognitionModel.featureExtractor._tokenize_string(u):
-                        lexiconEmbeddings[token]['counts'] += 1
-                        for embedding_key in ('embed_feature_extractor', 'embed_contextual_transition_matrix'):
-                            if embedding_key not in lexiconEmbeddings[token]:
-                                lexiconEmbeddings[token][embedding_key] = utteranceDict[u][embedding_key]
-                            else:
-                                lexiconEmbeddings[token][embedding_key] += utteranceDict[u][embedding_key]
-
+                    #### Calculate the average embedding that a given token appears within, for training utterances.
+                    if i < 1:
+                        for token in result.recognitionModel.featureExtractor._tokenize_string(u):
+                            lexiconEmbeddings[token]['counts'] += 1
+                            for embedding_key in ('embed_feature_extractor', 'embed_contextual_transition_matrix'):
+                                if embedding_key not in lexiconEmbeddings[token]:
+                                    lexiconEmbeddings[token][embedding_key] = utteranceDict[u][embedding_key]
+                                else:
+                                    lexiconEmbeddings[token][embedding_key] += utteranceDict[u][embedding_key]
+                        ### Experimental token-embeddings.
+                        skippedTokenEmbeddings = get_feature_delta_embeddings(u, result.recognitionModel, utteranceDict[u]['embed_feature_extractor'], utteranceDict[u]['embed_contextual_transition_matrix'], skippedTokenEmbeddings)
                 except:
+                    assert False
                     pass
+
         embedding_keys = [key for key in list(trainingUtterances[list(trainingUtterances.keys())[0]].keys()) if key.startswith('embed')]
 
         # Token embeddings: average and normalize by the average embedding.
@@ -674,10 +705,13 @@ if __name__ == "__main__":
         for token in list(lexiconEmbeddings.keys()):
             if embedding_keys[0] not in lexiconEmbeddings[token]:
                 del lexiconEmbeddings[token]
+            elif embedding_keys[0] not in skippedTokenEmbeddings[token]:
+                print(token)
+                del skippedTokenEmbeddings[token]
             else:
                 for key in embedding_keys:
                     lexiconEmbeddings[token][key] = (lexiconEmbeddings[token][key] / lexiconEmbeddings[token]['counts']) # - averageEmbeddings[key]
-                
+                    skippedTokenEmbeddings[token][key] = (skippedTokenEmbeddings[token][key] / skippedTokenEmbeddings[token]['counts'])
 
         # Analogy embeddings: randomly select analogies, but only keep around the best.
         random_seed, num_analogies = 0, 100
@@ -725,24 +759,45 @@ if __name__ == "__main__":
                 word_subtractions.append(('reach two %s the %s' % (dir_string, obj1), obj1))
 
         wordSubtractionDict = {"%s - %s" % (a, b) : {'frontiers' : 0} for (a, b) in word_subtractions}
+        word_subtraction_embedding_keys = set()
         for wordSubtraction in word_subtractions:
             a, b = wordSubtraction
             for embedding_key in embedding_keys:
-                wordSubtractionDict["%s - %s" % (a, b)][embedding_key] = manualAnalogyUtterances[a][embedding_key]  - directLexiconEmbeddings[b][embedding_key]
+                directSubtraction = manualAnalogyUtterances[a][embedding_key]  - directLexiconEmbeddings[b][embedding_key]
+                wordSubtractionDict["%s - %s" % (a, b)][embedding_key + '*' + "_direct_lexicon"] = directSubtraction
+                word_subtraction_embedding_keys.add(embedding_key + '*' + "_direct_lexicon")
 
-        
+                skippedSubtraction = manualAnalogyUtterances[a][embedding_key]  - skippedLexiconEmbeddings[b][embedding_key]
+                wordSubtractionDict["%s - %s" % (a, b)][embedding_key + '*' + "_skipped_lexicon"] = directSubtraction
+                word_subtraction_embedding_keys.add(embedding_key + '*' + "_skipped_lexicon")
+
+                if 'embed_feature_extractor' in embedding_key:
+                    # Feature extractor with delta.
+                    deltaSubtraction = manualAnalogyUtterances[a][embedding_key]  - lexiconEmbeddings[b][embedding_key]
+                    wordSubtractionDict["%s - %s" % (a, b)][embedding_key + '*' + "_delta_lexicon"] = deltaSubtraction
+                    word_subtraction_embedding_keys.add(embedding_key + '*' + "_delta_lexicon")
+                    # In both cases, run the new embedding through the model again.
+                    for embedding_type, embedding in [('delta', deltaSubtraction), ('direct', directSubtraction)]:
+                        new_features = result.recognitionModel._MLP(torch.from_numpy(embedding))
+                        re_embedded = result.recognitionModel.grammarBuilder.transitionMatrix(new_features).view(-1).data.cpu().numpy()
+                        wordSubtractionDict["%s - %s" % (a, b)]['embed_contextual_transition_matrix' + '*' + "_%s_re_embedded" % embedding_type] = re_embedded
+                        word_subtraction_embedding_keys.add('embed_contextual_transition_matrix' + '*' + "_%s_re_embedded" % embedding_type)
+                
         # Calculate kNN utterances.
         for embedding_key in embedding_keys:
-                kNN(trainingUtterances, trainingUtterances, 'train', embedding_key)
-                kNN(unsolvedUtterances, trainingUtterances, 'train', embedding_key)
+                #kNN(trainingUtterances, trainingUtterances, 'train', embedding_key)
+                #kNN(unsolvedUtterances, trainingUtterances, 'train', embedding_key)
                 #kNN(analogyDict, trainingUtterances, 'train', embedding_key)
                 #kNN(analogyDict, analogyDict, 'analogy', embedding_key)
-                kNN(manualAnalogyDict, trainingUtterances, 'train', embedding_key, closest_n=20)
-                kNN(lexiconEmbeddings, lexiconEmbeddings, 'train', embedding_key, closest_n=20)
+                #kNN(manualAnalogyDict, trainingUtterances, 'train', embedding_key, closest_n=20)
+                #kNN(lexiconEmbeddings, lexiconEmbeddings, 'train', embedding_key, closest_n=20)
                 kNN(taskSubtractionDict, trainingUtterances, 'train', embedding_key, closest_n=20)
-                kNN(wordSubtractionDict, trainingUtterances, 'train', embedding_key, closest_n=20)
 
-        for utteranceDict in trainingUtterances, unsolvedUtterances, analogyDict, lexiconEmbeddings, directLexiconEmbeddings, manualAnalogyDict, taskSubtractionDict, wordSubtractionDict: # removed: lexiconEmbeddings
+        for embedding_key in word_subtraction_embedding_keys:
+                kNN(wordSubtractionDict, trainingUtterances, 'train', embedding_key)
+
+        #for utteranceDict in trainingUtterances, unsolvedUtterances, analogyDict, lexiconEmbeddings, directLexiconEmbeddings, manualAnalogyDict, taskSubtractionDict, wordSubtractionDict: # removed: lexiconEmbeddings
+        for utteranceDict in (taskSubtractionDict, wordSubtractionDict):
             for utterance in utteranceDict:
                 # Check that we have anything to print first:
                 if all([not key.startswith('kNN') for key in utteranceDict[utterance].keys()]):
@@ -760,12 +815,13 @@ if __name__ == "__main__":
                             print(programs[0])
                     print("\n")
 
+        assert False
+
         for key in embedding_keys:
             plotTSNE(key, lexiconEmbeddings, key)
             plotTSNE(key, directLexiconEmbeddings, key)
 
-
-        assert False
+        
         #### Task-specific TSNE plots.
 
         # Get the recurrent feature extractor symbol embeddings.
