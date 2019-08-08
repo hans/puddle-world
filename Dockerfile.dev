@@ -11,13 +11,13 @@ RUN pip install rednose frozendict
 ENV NOSE_REDNOSE 1
 
 # Download pregex.
-RUN mkdir pregex && cd pregex && git clone https://github.com/insperatum/pregex && cd -
+RUN mkdir pregex && cd pregex && curl -L https://github.com/insperatum/pregex/tarball/master | tar xz && mv $(find . -name "insperatum-pregex-*") pregex
 ENV PYTHONPATH "/opt/puddle/pregex:${PYTHONPATH}"
 
 # Download EC.
-RUN git clone https://github.com/ellisk42/ec
+RUN curl -L https://github.com/ellisk42/ec/tarball/master | tar xz && mv $(find . -name "ellisk42-ec-*") ec
 ENV PYTHONPATH "/opt/puddle/ec:${PYTHONPATH}"
 
 # Download pyccg.
-RUN git clone https://github.com/hans/pyccg
+RUN curl -L https://github.com/hans/pyccg/tarball/master | tar xz && mv $(find . -name "hans-pyccg-*") pyccg
 ENV PYTHONPATH "/opt/puddle/pyccg:${PYTHONPATH}"
