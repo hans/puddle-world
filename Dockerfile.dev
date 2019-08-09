@@ -5,7 +5,7 @@ WORKDIR /opt/puddle
 
 # Download dependencies.
 ENV PATH "/opt/conda/bin:${PATH}"
-RUN conda install -y nltk=3.4 nose coverage tqdm dill && conda clean --all -y
+RUN conda install -y nltk=3.4 nose coverage tqdm dill scikit-learn && conda clean --all -y
 RUN conda install -c pytorch pytorch torchvision cudatoolkit=9.0
 RUN pip install rednose frozendict
 ENV NOSE_REDNOSE 1
