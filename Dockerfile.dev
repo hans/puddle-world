@@ -7,7 +7,7 @@ WORKDIR /opt/puddle
 ENV PATH "/opt/conda/bin:${PATH}"
 RUN conda install -y nltk=3.4 nose coverage tqdm dill scikit-learn && conda clean --all -y
 RUN conda install -c pytorch pytorch torchvision cudatoolkit=9.0
-RUN pip install rednose frozendict
+RUN pip install rednose frozendict pathos
 ENV NOSE_REDNOSE 1
 
 # Download pregex.
