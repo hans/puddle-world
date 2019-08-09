@@ -1,0 +1,2 @@
+Bootstrap: docker
+From: jrgauthier/puddle-world:dev
